@@ -1,26 +1,392 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom styles for smooth scrolling tabs */
+@layer components {
+  .tab-scroll-container {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(203 213 225) rgb(241 245 249);
+  }
+
+  .tab-scroll-container::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .tab-scroll-container::-webkit-scrollbar-track {
+    background: rgb(241 245 249);
+    border-radius: 3px;
+  }
+
+  .tab-scroll-container::-webkit-scrollbar-thumb {
+    background: rgb(203 213 225);
+    border-radius: 3px;
+  }
+
+  .tab-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: rgb(148 163 184);
+  }
+}
+
+/* Custom styles for our community savings app */
+@layer components {
+  .status-badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors;
+  }
+
+  .data-table {
+    @apply w-full border-collapse border-spacing-0;
+  }
+
+  .sidebar-nav {
+    @apply space-y-1;
+  }
+
+  .sidebar-nav-item {
+    @apply flex items-center rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .sidebar-nav-item.active {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+
+  .form-section {
+    @apply space-y-6 rounded-lg border bg-card p-6;
+  }
+
+  .stats-grid {
+    @apply grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4;
+  }
+
+  .stat-card {
+    @apply rounded-lg border bg-card p-6 text-card-foreground shadow-sm;
+  }
+
+  .loan-status-pending {
+    @apply border-yellow-200 bg-yellow-50 text-yellow-800;
+  }
+
+  .loan-status-approved {
+    @apply border-blue-200 bg-blue-50 text-blue-800;
+  }
+
+  .loan-status-disbursed {
+    @apply border-green-200 bg-green-50 text-green-800;
+  }
+
+  .loan-status-completed {
+    @apply border-gray-200 bg-gray-50 text-gray-800;
+  }
+
+  .loan-status-rejected {
+    @apply border-red-200 bg-red-50 text-red-800;
+  }
+
+  .contribution-status-paid {
+    @apply border-green-200 bg-green-50 text-green-800;
+  }
+
+  .contribution-status-pending {
+    @apply border-yellow-200 bg-yellow-50 text-yellow-800;
+  }
+
+  .contribution-status-overdue {
+    @apply border-red-200 bg-red-50 text-red-800;
+  }
+
+  /* Mobile-first responsive utilities */
+  .mobile-container {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .mobile-card {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm mb-4;
+  }
+
+  .mobile-stats-grid {
+    @apply grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4;
+  }
+
+  .mobile-content-grid {
+    @apply grid gap-4 grid-cols-1 lg:grid-cols-2;
+  }
+
+  .mobile-table-scroll {
+    @apply overflow-x-auto -mx-4 sm:mx-0 scrollbar-hide;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better mobile table layouts */
+  @media (max-width: 768px) {
+    .mobile-table-scroll table {
+      min-width: 700px;
+    }
+
+    .mobile-table-scroll th,
+    .mobile-table-scroll td {
+      padding: 0.5rem;
+      font-size: 0.875rem;
+      white-space: nowrap;
+    }
+  }
+
+  .mobile-button-stack {
+    @apply flex flex-col sm:flex-row gap-2 sm:gap-3;
+  }
+
+  .mobile-form-stack {
+    @apply grid gap-4 grid-cols-1 sm:grid-cols-2;
+  }
+
+  /* Additional mobile responsiveness improvements */
+  @media (max-width: 640px) {
+    /* Ensure cards don't overflow */
+    .mobile-card {
+      margin-left: -0.5rem;
+      margin-right: -0.5rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    /* Better button layouts on mobile */
+    .mobile-button-stack {
+      gap: 0.75rem;
+    }
+
+    /* Responsive form inputs */
+    .mobile-form-stack input,
+    .mobile-form-stack select,
+    .mobile-form-stack textarea {
+      font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    /* Better spacing for mobile */
+    .mobile-container {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+
+    /* Prevent text overflow in tables */
+    .mobile-table-scroll .truncate {
+      max-width: 120px;
+    }
+  }
+
+  /* Removed sticky column styles for fully scrollable tables */
+
+  /* Smooth animations */
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Mobile-optimized transitions */
+  .smooth-transition {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .smooth-hover {
+    @apply transition-all duration-200 ease-out hover:scale-105 active:scale-95;
+  }
+
+  .smooth-button {
+    @apply transition-all duration-200 ease-out hover:shadow-md active:scale-95;
+  }
+
+  /* Mobile touch targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  /* Mobile typography */
+  .mobile-heading {
+    @apply text-2xl sm:text-3xl font-bold tracking-tight;
+  }
+
+  .mobile-subheading {
+    @apply text-lg sm:text-xl font-semibold;
+  }
+
+  /* Mobile navigation */
+  .mobile-nav-tabs {
+    @apply flex overflow-x-auto scrollbar-hide gap-1 pb-2 mb-4 bg-transparent border-none h-auto p-0;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .mobile-nav-tab {
+    @apply whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors flex-shrink-0 justify-center;
+    min-width: 80px;
+  }
+
+  /* Override default TabsList styles for mobile */
+  .mobile-nav-tabs[role="tablist"] {
+    @apply bg-transparent border-none h-auto p-0;
+  }
+
+  /* Better touch targets and mobile scrolling */
+  @media (max-width: 640px) {
+    .mobile-nav-tabs {
+      padding-right: 0.75rem;
+      margin-left: -0.75rem;
+      margin-right: -0.75rem;
+      padding-left: 0.75rem;
+      gap: 0.25rem;
+    }
+
+    .mobile-nav-tab {
+      min-width: 70px;
+      font-size: 0.7rem;
+      padding: 0.4rem 0.5rem;
+      text-align: center;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .mobile-nav-tab {
+      min-width: 60px;
+      font-size: 0.65rem;
+      padding: 0.35rem 0.4rem;
+    }
+  }
+
+  /* Hide scrollbar for mobile nav */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
