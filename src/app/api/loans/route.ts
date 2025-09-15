@@ -21,6 +21,7 @@ export const GET = withErrorHandling(
       status: searchParams.get('status') as any || undefined,
       fromDate: searchParams.get('fromDate') || undefined,
       toDate: searchParams.get('toDate') || undefined,
+      search: searchParams.get('search') || undefined,
     };
 
     await connectToDatabase();
@@ -47,6 +48,42 @@ export const GET = withErrorHandling(
       }
       if (filters.toDate) {
         query.requestDate.$lte = new Date(filters.toDate);
+      }
+    }
+
+    // Handle search by borrower name
+    let userIds: string[] = [];
+    if (filters.search) {
+      const searchRegex = new RegExp(filters.search, 'i');
+      const users = await User.find({
+        $or: [
+          { name: { $regex: searchRegex } },
+          { memberId: { $regex: searchRegex } },
+          { email: { $regex: searchRegex } }
+        ]
+      }).select('_id').lean();
+
+      userIds = users.map(user => user._id.toString());
+
+      if (userIds.length > 0) {
+        query.userId = { $in: userIds };
+      } else {
+        // No users found matching search, return empty result
+        const response: PaginatedResponse<ILoan> = {
+          data: [],
+          pagination: {
+            current: filters.page!,
+            total: 0,
+            pages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+
+        return NextResponse.json({
+          success: true,
+          ...response,
+        });
       }
     }
 
@@ -111,9 +148,9 @@ export const POST = withErrorHandling(
       );
     }
 
-    if (requestedAmount < 1000 || requestedAmount > 100000) {
+    if (requestedAmount < 1000 || requestedAmount > 200000) {
       return NextResponse.json(
-        { success: false, message: 'Loan amount must be between 1000 and 100000' },
+        { success: false, message: 'Loan amount must be between 1000 and 200000' },
         { status: 400 }
       );
     }

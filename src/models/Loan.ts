@@ -21,7 +21,7 @@ const LoanSchema: Schema = new Schema(
       type: Number,
       required: [true, 'Requested amount is required'],
       min: [1000, 'Minimum loan amount is 1000'],
-      max: [100000, 'Maximum loan amount is 100000'],
+      max: [200000, 'Maximum loan amount is 200000'],
     },
     approvedAmount: {
       type: Number,

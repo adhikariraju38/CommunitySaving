@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { calculateProratedInterest } from "@/lib/loan-calculations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,17 @@ interface Loan {
   lastInterestPaidDate?: string;
 }
 
+interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    current: number;
+    total: number;
+    pages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
 interface Props {
   user: {
     _id: string;
@@ -86,11 +98,24 @@ export default function LoanManagement({ user }: Props) {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  // Active loans pagination and search state
+  const [activeLoansSearch, setActiveLoansSearch] = useState("");
+  const [activeLoansPage, setActiveLoansPage] = useState(1);
+  const [activeLoansHasMore, setActiveLoansHasMore] = useState(true);
+  const [activeLoansLoading, setActiveLoansLoading] = useState(false);
+
   // Modal states
   const [showLoanDetails, setShowLoanDetails] = useState(false);
   const [selectedLoanId, setSelectedLoanId] = useState<string>("");
   const [showSettlementModal, setShowSettlementModal] = useState(false);
   const [settlementLoan, setSettlementLoan] = useState<Loan | null>(null);
+
+  // Settlement states
+  const [settlementDate, setSettlementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [settlementCalculations, setSettlementCalculations] = useState<{
+    interestOnly: { amount: number; fromDate: string; toDate: string; monthsElapsed: number };
+    full: { amount: number; interestAmount: number; principalAmount: number };
+  } | null>(null);
 
   // Direct loan creation states
   const [showCreateLoanForm, setShowCreateLoanForm] = useState(false);
@@ -120,9 +145,24 @@ export default function LoanManagement({ user }: Props) {
 
   useEffect(() => {
     loadPendingLoans();
-    loadActiveLoans();
+    loadActiveLoans(true); // Initial load
     loadUsers();
   }, []);
+
+  // Debounced search effect for active loans
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeLoansSearch !== "") {
+        setActiveLoansPage(1);
+        loadActiveLoans(true); // Reset and search
+      } else {
+        setActiveLoansPage(1);
+        loadActiveLoans(true); // Reset to show all
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [activeLoansSearch]);
 
   const loadPendingLoans = async () => {
     try {
@@ -135,33 +175,77 @@ export default function LoanManagement({ user }: Props) {
     }
   };
 
-  const loadActiveLoans = async () => {
-    try {
-      // Load both approved and disbursed loans as "active"
-      const approvedResult = await apiRequest<Loan[]>(
-        "/api/loans?status=approved"
-      );
-      const disbursedResult = await apiRequest<Loan[]>(
-        "/api/loans?status=disbursed"
-      );
+  const loadActiveLoans = useCallback(async (reset: boolean = false) => {
+    if (reset) {
+      setActiveLoansLoading(true);
+      setActiveLoansPage(1);
+      setActiveLoans([]);
+      setActiveLoansHasMore(true);
+    } else {
+      setActiveLoansLoading(true);
+    }
 
-      let allActiveLoans: Loan[] = [];
+    try {
+      const currentPage = reset ? 1 : activeLoansPage;
+
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: '10',
+        sortBy: 'requestDate',
+        sortOrder: 'desc'
+      });
+
+      // Add search parameter if search term exists
+      if (activeLoansSearch.trim()) {
+        params.append('search', activeLoansSearch.trim());
+      }
+
+      // Load both approved and disbursed loans separately and combine
+      const approvedParams = new URLSearchParams(params);
+      approvedParams.set('status', 'approved');
+
+      const disbursedParams = new URLSearchParams(params);
+      disbursedParams.set('status', 'disbursed');
+
+      const [approvedResult, disbursedResult] = await Promise.all([
+        apiRequest<any>(`/api/loans?${approvedParams.toString()}`),
+        apiRequest<any>(`/api/loans?${disbursedParams.toString()}`)
+      ]);
+
+      let newLoans: Loan[] = [];
+      let hasMoreData = false;
 
       if (approvedResult.success && approvedResult.data) {
-        allActiveLoans = [...allActiveLoans, ...approvedResult.data];
+        newLoans = [...newLoans, ...approvedResult.data];
+        hasMoreData = hasMoreData || (approvedResult as any).pagination?.hasNext || false;
       }
 
       if (disbursedResult.success && disbursedResult.data) {
-        allActiveLoans = [...allActiveLoans, ...disbursedResult.data];
+        newLoans = [...newLoans, ...disbursedResult.data];
+        hasMoreData = hasMoreData || (disbursedResult as any).pagination?.hasNext || false;
       }
 
-      setActiveLoans(allActiveLoans);
+      // Sort combined results by requestDate desc
+      newLoans.sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+
+      if (reset) {
+        setActiveLoans(newLoans);
+      } else {
+        setActiveLoans(prev => [...prev, ...newLoans]);
+      }
+
+      setActiveLoansHasMore(hasMoreData);
+      setActiveLoansPage(currentPage + 1);
     } catch (error) {
       console.error("Error loading active loans:", error);
     } finally {
-      setLoading(false);
+      setActiveLoansLoading(false);
+      if (reset) {
+        setLoading(false);
+      }
     }
-  };
+  }, [activeLoansPage, activeLoansSearch]);
 
   const loadUsers = async () => {
     try {
@@ -392,15 +476,50 @@ export default function LoanManagement({ user }: Props) {
     }
   };
 
+  const calculateSettlementAmounts = useCallback((loan: Loan, settlementDateStr: string) => {
+    const settlementDateObj = new Date(settlementDateStr);
+    const principal = loan.approvedAmount || loan.requestedAmount;
+
+    // Calculate prorated interest
+    const interestCalc = calculateProratedInterest(loan as any, settlementDateObj);
+
+    return {
+      interestOnly: {
+        amount: interestCalc.interestAmount,
+        fromDate: interestCalc.fromDate.toISOString().split('T')[0],
+        toDate: interestCalc.toDate.toISOString().split('T')[0],
+        monthsElapsed: interestCalc.monthsElapsed
+      },
+      full: {
+        amount: principal + interestCalc.interestAmount,
+        interestAmount: interestCalc.interestAmount,
+        principalAmount: principal
+      }
+    };
+  }, []);
+
   const handleSettlement = (loan: Loan) => {
     setSettlementLoan(loan);
+    setSettlementDate(new Date().toISOString().split('T')[0]);
     setShowSettlementModal(true);
+
+    // Calculate initial settlement amounts
+    const calculations = calculateSettlementAmounts(loan, new Date().toISOString().split('T')[0]);
+    setSettlementCalculations(calculations);
   };
+
+  // Recalculate settlement amounts when date changes
+  useEffect(() => {
+    if (settlementLoan && settlementDate) {
+      const calculations = calculateSettlementAmounts(settlementLoan, settlementDate);
+      setSettlementCalculations(calculations);
+    }
+  }, [settlementLoan, settlementDate, calculateSettlementAmounts]);
 
   const processSettlement = async (
     settlementType: "interest-only" | "full"
   ) => {
-    if (!settlementLoan) return;
+    if (!settlementLoan || !settlementCalculations) return;
 
     setProcessingId(settlementLoan._id);
     try {
@@ -414,31 +533,6 @@ export default function LoanManagement({ user }: Props) {
       }
 
       const currentLoan = (loanResult as any).loan;
-      const principal =
-        currentLoan.approvedAmount || currentLoan.requestedAmount;
-      const yearlyInterest = principal * (currentLoan.interestRate / 100);
-
-      // Check if interest has already been paid this year
-      let interestAlreadyPaidThisYear = false;
-      if (currentLoan.lastInterestPaidDate) {
-        const lastPaymentYear = new Date(
-          currentLoan.lastInterestPaidDate
-        ).getFullYear();
-        const currentYear = new Date().getFullYear();
-        interestAlreadyPaidThisYear = lastPaymentYear === currentYear;
-      }
-
-      // Validation for interest-only settlements
-      if (settlementType === "interest-only" && interestAlreadyPaidThisYear) {
-        showToast.error(
-          "Interest already paid",
-          `Interest for year ${new Date().getFullYear()} has already been paid on ${new Date(
-            currentLoan.lastInterestPaidDate
-          ).toLocaleDateString()}`
-        );
-        setProcessingId(null);
-        return;
-      }
 
       let paymentAmount = 0;
       let principalAmount = 0;
@@ -446,28 +540,21 @@ export default function LoanManagement({ user }: Props) {
       let notes = "";
 
       if (settlementType === "interest-only") {
-        // Case 1: Only pay interest for 1 year, keep principal
-        paymentAmount = yearlyInterest;
+        paymentAmount = settlementCalculations.interestOnly.amount;
         principalAmount = 0;
-        interestAmount = yearlyInterest;
-        notes =
-          "Interest-only settlement for 1 year. Principal amount retained.";
+        interestAmount = settlementCalculations.interestOnly.amount;
+        const fromDate = new Date(settlementCalculations.interestOnly.fromDate).toLocaleDateString();
+        const toDate = new Date(settlementCalculations.interestOnly.toDate).toLocaleDateString();
+        const monthsElapsed = settlementCalculations.interestOnly.monthsElapsed.toFixed(2);
+        notes = `Interest-only settlement from ${fromDate} to ${toDate} (${monthsElapsed} months)`;
       } else {
-        // Case 2: Full settlement - adjust based on whether interest was already paid this year
-        if (interestAlreadyPaidThisYear) {
-          // Only charge principal if interest already paid this year
-          paymentAmount = principal;
-          principalAmount = principal;
-          interestAmount = 0;
-          notes =
-            "Full settlement - principal only (interest already paid this year).";
-        } else {
-          // Charge both principal and interest
-          paymentAmount = principal + yearlyInterest;
-          principalAmount = principal;
-          interestAmount = yearlyInterest;
-          notes = "Full settlement - principal and 1 year interest paid.";
-        }
+        // Full settlement
+        paymentAmount = settlementCalculations.full.amount;
+        principalAmount = settlementCalculations.full.principalAmount;
+        interestAmount = settlementCalculations.full.interestAmount;
+        const fromDate = new Date(settlementCalculations.interestOnly.fromDate).toLocaleDateString();
+        const toDate = new Date(settlementCalculations.interestOnly.toDate).toLocaleDateString();
+        notes = `Full loan settlement with prorated interest from ${fromDate} to ${toDate}`;
       }
 
       // Record the settlement payment
@@ -482,6 +569,7 @@ export default function LoanManagement({ user }: Props) {
             principalAmount: principalAmount,
             interestAmount: interestAmount,
             paymentMethod: "settlement",
+            paymentDate: settlementDate,
             notes: notes,
           }),
         }
@@ -498,11 +586,11 @@ export default function LoanManagement({ user }: Props) {
             }),
           });
         } else if (settlementType === "interest-only") {
-          // Update last interest paid date
+          // Update last interest paid date to the settlement date
           await apiRequest(`/api/loans/${currentLoan._id}`, {
             method: "PUT",
             body: JSON.stringify({
-              lastInterestPaidDate: new Date().toISOString(),
+              lastInterestPaidDate: settlementDate,
             }),
           });
         }
@@ -789,99 +877,144 @@ export default function LoanManagement({ user }: Props) {
           <TabsContent value="active" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Active Loans</CardTitle>
-                <CardDescription>
-                  Loans that have been approved and disbursed
-                </CardDescription>
+                <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                  <div>
+                    <CardTitle>Active Loans</CardTitle>
+                    <CardDescription>
+                      Loans that have been approved and disbursed
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center space-x-2 min-w-0 sm:w-64">
+                    <Input
+                      placeholder="Search by borrower name..."
+                      value={activeLoansSearch}
+                      onChange={(e) => setActiveLoansSearch(e.target.value)}
+                      className="flex-1"
+                    />
+                    {activeLoansSearch && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActiveLoansSearch("")}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {activeLoans.length === 0 ? (
+                {activeLoans.length === 0 && !activeLoansLoading ? (
                   <div className="text-center py-8">
-                    <p className="text-muted-foreground">No active loans</p>
+                    <p className="text-muted-foreground">
+                      {activeLoansSearch ? "No loans found matching your search" : "No active loans"}
+                    </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Borrower</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Interest</TableHead>
-                          <TableHead>Total Due</TableHead>
-                          <TableHead>Paid</TableHead>
-                          <TableHead>Balance</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {activeLoans.map((loan) => (
-                          <TableRow key={loan._id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">
-                                  {loan.userId.name}
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Borrower</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Interest</TableHead>
+                            <TableHead>Total Due</TableHead>
+                            <TableHead>Paid</TableHead>
+                            <TableHead>Balance</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {activeLoans.map((loan) => (
+                            <TableRow key={loan._id}>
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium">
+                                    {loan.userId.name}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {loan.userId.memberId}
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {loan.userId.memberId}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrencyLocal(loan.approvedAmount || 0)}
-                            </TableCell>
-                            <TableCell>{loan.interestRate}%</TableCell>
-                            <TableCell>
-                              {formatCurrencyLocal(loan.totalAmountDue)}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrencyLocal(loan.amountPaid)}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrencyLocal(loan.remainingBalance)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getStatusColor(loan.status)}>
-                                {loan.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                {loan.status === "approved" && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => disburseLoan(loan._id)}
-                                    disabled={processingId === loan._id}
-                                  >
-                                    Disburse
-                                  </Button>
-                                )}
-                                {loan.status === "disbursed" &&
-                                  loan.remainingBalance > 0 && (
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrencyLocal(loan.approvedAmount || 0)}
+                              </TableCell>
+                              <TableCell>{loan.interestRate}%</TableCell>
+                              <TableCell>
+                                {formatCurrencyLocal(loan.totalAmountDue)}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrencyLocal(loan.amountPaid)}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrencyLocal(loan.remainingBalance)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={getStatusColor(loan.status)}>
+                                  {loan.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  {loan.status === "approved" && (
                                     <Button
                                       size="sm"
-                                      variant="secondary"
-                                      onClick={() => handleSettlement(loan)}
+                                      onClick={() => disburseLoan(loan._id)}
                                       disabled={processingId === loan._id}
                                     >
-                                      <CheckSquare className="h-4 w-4 mr-1" />
-                                      Settlement
+                                      Disburse
                                     </Button>
                                   )}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openLoanDetails(loan._id)}
-                                >
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Details
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                                  {loan.status === "disbursed" &&
+                                    loan.remainingBalance > 0 && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => handleSettlement(loan)}
+                                        disabled={processingId === loan._id}
+                                      >
+                                        <CheckSquare className="h-4 w-4 mr-1" />
+                                        Settlement
+                                      </Button>
+                                    )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openLoanDetails(loan._id)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    Details
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Infinite scroll controls */}
+                    <div className="flex justify-center py-4">
+                      {activeLoansLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm text-muted-foreground">Loading more loans...</span>
+                        </div>
+                      ) : activeLoansHasMore ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => loadActiveLoans(false)}
+                          disabled={activeLoansLoading}
+                        >
+                          Load More Loans
+                        </Button>
+                      ) : activeLoans.length > 0 ? (
+                        <p className="text-sm text-muted-foreground">No more loans to load</p>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1231,75 +1364,100 @@ export default function LoanManagement({ user }: Props) {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h3 className="font-medium">Settlement Options:</h3>
+                {/* Settlement Date Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="settlement-date">Settlement Date</Label>
+                  <Input
+                    id="settlement-date"
+                    type="date"
+                    value={settlementDate}
+                    onChange={(e) => setSettlementDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Select the date when the settlement payment will be made
+                  </p>
+                </div>
 
-                  <div className="space-y-4">
-                    {/* Interest-Only Settlement Card */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-blue-600" />
-                        <h4 className="font-medium text-lg">
-                          Interest-Only Settlement
-                        </h4>
-                      </div>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>• Pay only the yearly interest amount</p>
-                        <p>• Principal remains active for future use</p>
-                        <p className="font-medium text-blue-600">
-                          Amount:{" "}
-                          {formatCurrencyLocal(
-                            (settlementLoan.approvedAmount ||
-                              settlementLoan.requestedAmount) *
-                            (settlementLoan.interestRate / 100)
-                          )}
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => processSettlement("interest-only")}
-                        disabled={processingId === settlementLoan._id}
-                        className="w-full"
-                        variant="outline"
-                      >
-                        {processingId === settlementLoan._id
-                          ? "Processing..."
-                          : "Pay Interest Only"}
-                      </Button>
+                {settlementCalculations && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Settlement Options:</h3>
+
+                    {/* Period Info */}
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Interest Period:</strong> {new Date(settlementCalculations.interestOnly.fromDate).toLocaleDateString()} to {new Date(settlementCalculations.interestOnly.toDate).toLocaleDateString()}
+                        ({settlementCalculations.interestOnly.monthsElapsed.toFixed(2)} months)
+                      </p>
                     </div>
 
-                    {/* Full Settlement Card */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <CheckSquare className="h-5 w-5 text-green-600" />
-                        <h4 className="font-medium text-lg">Full Settlement</h4>
+                    <div className="space-y-4">
+                      {/* Interest-Only Settlement Card */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-5 w-5 text-blue-600" />
+                          <h4 className="font-medium text-lg">
+                            Interest-Only Settlement
+                          </h4>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <p>• Pay only the prorated interest amount</p>
+                          <p>• Principal remains active for future use</p>
+                          <p className="font-medium text-blue-600">
+                            Amount: {formatCurrencyLocal(settlementCalculations.interestOnly.amount)}
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => processSettlement("interest-only")}
+                          disabled={processingId === settlementLoan._id || settlementCalculations.interestOnly.amount <= 0}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          {processingId === settlementLoan._id
+                            ? "Processing..."
+                            : "Pay Interest Only"}
+                        </Button>
                       </div>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>• Pay principal + yearly interest</p>
-                        <p>• Loan will be completed and closed</p>
-                        <p className="font-medium text-green-600">
-                          Amount:{" "}
-                          {formatCurrencyLocal(
-                            (settlementLoan.approvedAmount ||
-                              settlementLoan.requestedAmount) +
-                            (settlementLoan.approvedAmount ||
-                              settlementLoan.requestedAmount) *
-                            (settlementLoan.interestRate / 100)
-                          )}
-                        </p>
+
+                      {/* Full Settlement Card */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <CheckSquare className="h-5 w-5 text-green-600" />
+                          <h4 className="font-medium text-lg">Full Settlement</h4>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-2">
+                          <p>• Pay principal + prorated interest</p>
+                          <p>• Loan will be completed and closed</p>
+                          <div className="bg-gray-50 p-2 rounded text-xs">
+                            <div className="flex justify-between">
+                              <span>Principal:</span>
+                              <span>{formatCurrencyLocal(settlementCalculations.full.principalAmount)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Interest:</span>
+                              <span>{formatCurrencyLocal(settlementCalculations.full.interestAmount)}</span>
+                            </div>
+                            <hr className="my-1" />
+                            <div className="flex justify-between font-medium">
+                              <span>Total:</span>
+                              <span>{formatCurrencyLocal(settlementCalculations.full.amount)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => processSettlement("full")}
+                          disabled={processingId === settlementLoan._id}
+                          className="w-full"
+                          variant="default"
+                        >
+                          {processingId === settlementLoan._id
+                            ? "Processing..."
+                            : "Complete Settlement"}
+                        </Button>
                       </div>
-                      <Button
-                        onClick={() => processSettlement("full")}
-                        disabled={processingId === settlementLoan._id}
-                        className="w-full"
-                        variant="default"
-                      >
-                        {processingId === settlementLoan._id
-                          ? "Processing..."
-                          : "Complete Settlement"}
-                      </Button>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="bg-blue-50 p-3 rounded-lg">
                   <p className="text-sm text-blue-800">

@@ -242,4 +242,5 @@ export interface LoanFilter extends PaginationQuery {
   status?: 'pending' | 'approved' | 'rejected' | 'disbursed' | 'completed';
   fromDate?: string;
   toDate?: string;
+  search?: string;
 }

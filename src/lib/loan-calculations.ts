@@ -72,3 +72,67 @@ export function addDynamicCalculationsToLoan(loan: any, currentDate?: Date): any
 export function addDynamicCalculationsToLoans(loans: any[], currentDate?: Date): any[] {
     return loans.map(loan => addDynamicCalculationsToLoan(loan, currentDate));
 }
+
+/**
+ * Calculate interest between two specific dates
+ */
+export function calculateInterestBetweenDates(
+    principal: number,
+    interestRate: number,
+    fromDate: Date,
+    toDate: Date
+): { interestAmount: number; monthsElapsed: number; daysElapsed: number } {
+    const timeDiff = toDate.getTime() - fromDate.getTime();
+    const daysElapsed = Math.max(0, timeDiff / (1000 * 3600 * 24));
+    const monthsElapsed = daysElapsed / 30.44; // Average days per month
+
+    // Simple interest calculation
+    const interestAmount = principal * (interestRate / 100) * (monthsElapsed / 12);
+
+    return {
+        interestAmount: Math.max(0, interestAmount),
+        monthsElapsed,
+        daysElapsed
+    };
+}
+
+/**
+ * Calculate interest from last payment date to settlement date
+ */
+export function calculateProratedInterest(
+    loan: ILoan,
+    settlementDate: Date,
+    lastInterestPaymentDate?: Date
+): {
+    interestAmount: number;
+    fromDate: Date;
+    toDate: Date;
+    monthsElapsed: number;
+    daysElapsed: number;
+} {
+    const principal = loan.approvedAmount || loan.requestedAmount;
+    const approvalDate = new Date(loan.approvalDate || loan.requestDate);
+
+    // Determine the starting date for interest calculation
+    let fromDate = approvalDate;
+
+    if (lastInterestPaymentDate) {
+        fromDate = new Date(lastInterestPaymentDate);
+    } else if (loan.lastInterestPaidDate) {
+        fromDate = new Date(loan.lastInterestPaidDate);
+    }
+
+    // Calculate interest from the start date to settlement date
+    const calculation = calculateInterestBetweenDates(
+        principal,
+        loan.interestRate,
+        fromDate,
+        settlementDate
+    );
+
+    return {
+        ...calculation,
+        fromDate,
+        toDate: settlementDate
+    };
+}
