@@ -343,7 +343,7 @@ export default function MembersTab({
                       <div className="text-muted-foreground">
                         <p>No members found</p>
                         <p className="text-sm mt-1">
-                          Use the "Add Member" or "Bulk Add" buttons to add members
+                          Use the &quot;Add Member&quot; or &quot;Bulk Add&quot; buttons to add members
                         </p>
                       </div>
                     </TableCell>

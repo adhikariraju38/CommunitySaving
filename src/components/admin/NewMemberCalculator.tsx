@@ -343,7 +343,7 @@ export default function NewMemberCalculator() {
                             <div className="space-y-3">
                                 <p className="text-sm">
                                     <strong>Why this calculation?</strong> New members must pay the equivalent value
-                                    that existing members' contributions have earned through interest over time.
+                                    that existing members&apos; contributions have earned through interest over time.
                                 </p>
                                 <div className="space-y-2">
                                     <p className="text-sm">
@@ -352,7 +352,7 @@ export default function NewMemberCalculator() {
                                     <ul className="text-sm list-disc list-inside space-y-1 ml-4">
                                         <li>Year 1 money has been earning interest for the longest time</li>
                                         <li>Year 2 money has been earning interest for a shorter period</li>
-                                        <li>Recent months' money has earned little or no interest</li>
+                                        <li>Recent months&apos; money has earned little or no interest</li>
                                         <li>This ensures fairness between existing and new members</li>
                                     </ul>
                                 </div>

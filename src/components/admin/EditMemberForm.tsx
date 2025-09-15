@@ -261,7 +261,7 @@ export default function EditMemberForm({ member, onSuccess, onCancel }: EditMemb
                                 {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
                                 {!formData.email && !member.email && (
                                     <p className="text-sm text-blue-600 mt-1">
-                                        Leave empty if member doesn't need login access
+                                        Leave empty if member doesn&apos;t need login access
                                     </p>
                                 )}
                             </div>

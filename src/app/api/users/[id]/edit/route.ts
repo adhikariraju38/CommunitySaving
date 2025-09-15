@@ -5,14 +5,8 @@ import User from '@/models/User';
 import { validatePassword, validateEmail, validatePhone } from '@/lib/auth';
 import { IMemberEdit } from '@/types';
 
-interface Context {
-    params: {
-        id: string;
-    };
-}
-
 // PUT /api/users/[id]/edit - Edit member details (Admin only)
-const putHandler = withAuth(async (request: AuthenticatedRequest, context: Context) => {
+const putHandler = withAuth(async (request: AuthenticatedRequest) => {
     try {
         await connectDB();
 
@@ -24,7 +18,10 @@ const putHandler = withAuth(async (request: AuthenticatedRequest, context: Conte
             );
         }
 
-        const { id } = context.params;
+        // Extract ID from URL
+        const url = new URL(request.url);
+        const pathSegments = url.pathname.split('/');
+        const id = pathSegments[pathSegments.indexOf('users') + 1];
         const updateData: IMemberEdit = await request.json();
 
         // Find the user to update

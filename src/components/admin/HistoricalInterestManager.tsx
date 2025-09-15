@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -161,7 +161,7 @@ export default function HistoricalInterestManager() {
     };
 
     // Load records with filters
-    const loadRecords = async (page = 1) => {
+    const loadRecords = useCallback(async (page = 1) => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -192,14 +192,14 @@ export default function HistoricalInterestManager() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [pagination.limit, filters]);
 
     // Load data on mount and when filters change
     useEffect(() => {
         loadMembers();
         loadSummaryData();
         loadRecords();
-    }, [filters]);
+    }, [filters, loadRecords]);
 
     // Form validation
     const validateForm = (): boolean => {

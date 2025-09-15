@@ -18,6 +18,10 @@ export interface JWTPayload {
 
 // Generate JWT token
 export async function generateToken(user: IUser): Promise<string> {
+  if (!user.email) {
+    throw new Error('Cannot generate token for user without email');
+  }
+
   const payload = {
     userId: user._id.toString(),
     email: user.email,
@@ -52,14 +56,14 @@ export async function validateUserCredentials(email: string, password: string) {
 
     // Find user with password field
     const user = await User.findOne({ email, isActive: true }).select('+password');
-    
+
     if (!user) {
       return { success: false, message: 'Invalid credentials' };
     }
 
     // Check password
     const isPasswordValid = await user.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       return { success: false, message: 'Invalid credentials' };
     }
