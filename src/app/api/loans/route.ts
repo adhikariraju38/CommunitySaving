@@ -5,12 +5,13 @@ import User from '@/models/User';
 import Contribution from '@/models/Contribution';
 import { withAuth, withErrorHandling, AuthenticatedRequest } from '@/middleware/auth';
 import { LoanFilter, PaginatedResponse, ILoan } from '@/types';
+import { addDynamicCalculationsToLoans } from '@/lib/loan-calculations';
 
 // GET /api/loans - Get loans (filtered by user role)
 export const GET = withErrorHandling(
   withAuth(async (request: AuthenticatedRequest) => {
     const { searchParams } = new URL(request.url);
-    
+
     const filters: LoanFilter = {
       page: parseInt(searchParams.get('page') || '1'),
       limit: Math.min(parseInt(searchParams.get('limit') || '10'), 50),
@@ -26,7 +27,7 @@ export const GET = withErrorHandling(
 
     // Build query
     const query: any = {};
-    
+
     // If member, only show their own loans
     if (request.user.role === 'member') {
       query.userId = request.user.userId;
@@ -34,11 +35,11 @@ export const GET = withErrorHandling(
       // Admin can filter by specific user
       query.userId = filters.userId;
     }
-    
+
     if (filters.status) {
       query.status = filters.status;
     }
-    
+
     if (filters.fromDate || filters.toDate) {
       query.requestDate = {};
       if (filters.fromDate) {
@@ -67,8 +68,11 @@ export const GET = withErrorHandling(
       .limit(filters.limit!)
       .lean();
 
+    // Apply dynamic calculations to each loan
+    const loansWithDynamicCalculations = addDynamicCalculationsToLoans(loans);
+
     const response: PaginatedResponse<ILoan> = {
-      data: loans as unknown as ILoan[],
+      data: loansWithDynamicCalculations as unknown as ILoan[],
       pagination: {
         current: filters.page!,
         total,
@@ -116,7 +120,7 @@ export const POST = withErrorHandling(
 
     const repaymentDate = new Date(expectedRepaymentDate);
     const today = new Date();
-    
+
     if (repaymentDate <= today) {
       return NextResponse.json(
         { success: false, message: 'Repayment date must be in the future' },
@@ -128,11 +132,11 @@ export const POST = withErrorHandling(
 
     // Determine target user
     let targetUserId = request.user.userId;
-    
+
     if (request.user.role === 'admin' && userId) {
       // Admin creating loan for another user
       targetUserId = userId;
-      
+
       const targetUser = await User.findById(userId);
       if (!targetUser || !targetUser.isActive) {
         return NextResponse.json(
@@ -157,7 +161,7 @@ export const POST = withErrorHandling(
 
     // Check user's savings eligibility (should have some contribution history)
     const userSavings = await Contribution.getUserTotalSavings(targetUserId);
-    
+
     if (userSavings.totalSavings === 0) {
       return NextResponse.json(
         { success: false, message: 'User must have contribution history before requesting a loan' },
@@ -184,7 +188,7 @@ export const POST = withErrorHandling(
     });
 
     const savedLoan = await newLoan.save();
-    
+
     await savedLoan.populate('userId', 'name email memberId');
 
     return NextResponse.json({

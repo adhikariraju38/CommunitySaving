@@ -9,8 +9,8 @@ import { COMMUNITY_CONFIG, getRequiredContributionStartDate } from '@/config/com
 // POST /api/historical-contributions - Create historical contributions (Admin only)
 export const POST = withErrorHandling(
   withAdmin(async (request: AuthenticatedRequest) => {
-    const { 
-      userId, 
+    const {
+      userId,
       months, // Array of month strings in YYYY-MM format
       amount,
       paymentMethod,
@@ -68,7 +68,7 @@ export const POST = withErrorHandling(
         }
 
         const [year] = month.split('-');
-        
+
         contributionsToCreate.push({
           userId: userId,
           amount: amount,
@@ -90,7 +90,7 @@ export const POST = withErrorHandling(
     if (contributionsToCreate.length > 0) {
       try {
         createdContributions = await Contribution.insertMany(contributionsToCreate);
-        
+
         // Populate user details for response
         for (let contribution of createdContributions) {
           await contribution.populate('userId', 'name email memberId');
@@ -149,17 +149,28 @@ export const GET = withErrorHandling(
 
     // Generate required months (from community opening date or join date, whichever is later)
     const joinDate = new Date(user.joinDate);
-    const currentDate = new Date();
+    const now = new Date();
+    // For end-of-month policy: exclude current month since contributions are made at month end
+    const lastCompletedMonth = now.getFullYear() * 12 + now.getMonth() - 1; // Previous month
     const requiredMonths = [];
     const missingMonths = [];
-    
+
     // Start from community opening date or member join date (whichever is later)
     const startDate = getRequiredContributionStartDate(user.joinDate);
     startDate.setDate(1); // First day of month
-    
-    // Generate all months from start date to current month
+    startDate.setHours(0, 0, 0, 0); // Reset time to avoid timezone issues
+
+    // Generate all months from start date to last completed month (excluding current month)
     const tempDate = new Date(startDate);
-    while (tempDate <= currentDate) {
+
+    while (true) {
+      const tempMonth = tempDate.getFullYear() * 12 + tempDate.getMonth();
+
+      // Break if we've passed the last completed month (current month - 1)
+      if (tempMonth > lastCompletedMonth) {
+        break;
+      }
+
       const monthStr = tempDate.toISOString().slice(0, 7); // YYYY-MM
       requiredMonths.push({
         month: monthStr,
@@ -177,6 +188,7 @@ export const GET = withErrorHandling(
         });
       }
 
+      // Move to next month
       tempDate.setMonth(tempDate.getMonth() + 1);
     }
 

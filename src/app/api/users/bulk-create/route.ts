@@ -47,15 +47,22 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
                 memberErrors.push(`Row ${i + 1}: Name is required`);
             }
 
-            if (!member.phone || !validatePhone(member.phone)) {
-                memberErrors.push(`Row ${i + 1}: Valid phone number is required`);
+            // Phone is now optional, but if provided, it must be valid
+            if (member.phone && member.phone.trim() && !validatePhone(member.phone.trim())) {
+                memberErrors.push(`Row ${i + 1}: Invalid phone number format`);
             }
 
             if (memberErrors.length === 0) {
-                validMembers.push({
+                const validMember: any = {
                     name: member.name.trim(),
-                    phone: member.phone.trim(),
-                });
+                };
+
+                // Only include phone if it's provided and not empty
+                if (member.phone && member.phone.trim()) {
+                    validMember.phone = member.phone.trim();
+                }
+
+                validMembers.push(validMember);
             } else {
                 errors.push(...memberErrors);
             }
@@ -68,11 +75,12 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
             );
         }
 
-        // Check for duplicate phones in the request
+        // Check for duplicate phones in the request (only for members with phone numbers)
+        const membersWithPhones = validMembers.filter(m => m.phone);
         const phoneSet = new Set();
         const duplicatePhones: string[] = [];
 
-        for (const member of validMembers) {
+        for (const member of membersWithPhones) {
             if (phoneSet.has(member.phone)) {
                 duplicatePhones.push(member.phone);
             } else {
@@ -91,20 +99,22 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
             );
         }
 
-        // Check for existing users with same phone numbers
-        const existingPhones = await User.find({
-            phone: { $in: validMembers.map(m => m.phone) }
-        }).select('phone');
+        // Check for existing users with same phone numbers (only check provided phone numbers)
+        if (membersWithPhones.length > 0) {
+            const existingPhones = await User.find({
+                phone: { $in: membersWithPhones.map(m => m.phone) }
+            }).select('phone');
 
-        if (existingPhones.length > 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Some phone numbers already exist',
-                    details: existingPhones.map(u => u.phone)
-                },
-                { status: 409 }
-            );
+            if (existingPhones.length > 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: 'Some phone numbers already exist',
+                        details: existingPhones.map(u => u.phone)
+                    },
+                    { status: 409 }
+                );
+            }
         }
 
         // Create members
@@ -116,16 +126,22 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
                 // Generate unique member ID
                 const memberId = await User.generateMemberId();
 
-                const newUser = await User.create({
+                const userData: any = {
                     name: member.name,
-                    phone: member.phone,
                     memberId,
                     role: 'member',
                     status: 'approved', // Directly approved by admin
                     isActive: true,
                     hasLoginAccess: false, // No email/password initially
                     // Explicitly exclude email and password to avoid null constraint issues
-                });
+                };
+
+                // Only include phone if it was provided
+                if (member.phone) {
+                    userData.phone = member.phone;
+                }
+
+                const newUser = await User.create(userData);
 
                 createdMembers.push({
                     _id: newUser._id,

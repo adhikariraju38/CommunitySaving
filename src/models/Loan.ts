@@ -27,7 +27,7 @@ const LoanSchema: Schema = new Schema(
       type: Number,
       min: [0, 'Approved amount must be positive'],
       validate: {
-        validator: function(this: ILoan, value: number) {
+        validator: function (this: ILoan, value: number) {
           return !value || value <= this.requestedAmount;
         },
         message: 'Approved amount cannot exceed requested amount',
@@ -51,7 +51,7 @@ const LoanSchema: Schema = new Schema(
     approvedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: function(this: ILoan) {
+      required: function (this: ILoan) {
         return this.status === 'approved' || this.status === 'disbursed';
       },
     },
@@ -127,46 +127,34 @@ LoanSchema.index({ status: 1, requestDate: -1 });
 LoanSchema.index({ approvedBy: 1, approvalDate: -1 });
 LoanSchema.index({ expectedRepaymentDate: 1, status: 1 });
 
-// Pre-save middleware to calculate total amount due and remaining balance
+// Pre-save middleware for loan status management
 LoanSchema.pre('save', function (this: ILoan, next) {
-  // Calculate total amount due when loan is approved or disbursed
-  if (this.isModified('approvedAmount') || this.isModified('interestRate')) {
-    if (this.approvedAmount) {
-      const principal = this.approvedAmount;
-      
-      // Calculate repayment period in months (default 12 months for simplicity)
-      const requestDate = new Date(this.requestDate);
-      const expectedDate = new Date(this.expectedRepaymentDate);
-      const monthsDiff = Math.max(1, Math.round((expectedDate.getTime() - requestDate.getTime()) / (30 * 24 * 60 * 60 * 1000)));
-      
-      // Simple interest calculation
-      const totalInterest = principal * (this.interestRate / 100) * (monthsDiff / 12);
-      this.totalAmountDue = principal + totalInterest;
-      this.remainingBalance = this.totalAmountDue - this.amountPaid;
-    }
+  // Set totalAmountDue to approved amount for now (will be calculated dynamically)
+  if (this.isModified('approvedAmount') && this.approvedAmount && !this.totalAmountDue) {
+    this.totalAmountDue = this.approvedAmount;
   }
-  
-  // Update remaining balance when amount paid changes
-  if (this.isModified('amountPaid')) {
-    this.remainingBalance = this.totalAmountDue - this.amountPaid;
-    
-    // Mark as completed if fully paid
-    if (this.remainingBalance <= 0 && this.status === 'disbursed') {
-      this.status = 'completed';
-      this.actualRepaymentDate = new Date();
-    }
+
+  // Set remainingBalance (will be recalculated dynamically)
+  if (this.isModified('amountPaid') || !this.remainingBalance) {
+    this.remainingBalance = this.totalAmountDue - (this.amountPaid || 0);
   }
-  
+
+  // Mark as completed if fully paid (using dynamic calculation would be better)
+  if (this.isModified('amountPaid') && this.amountPaid >= this.totalAmountDue && this.status === 'disbursed') {
+    this.status = 'completed';
+    this.actualRepaymentDate = new Date();
+  }
+
   // Set approval date when status changes to approved
   if (this.isModified('status') && this.status === 'approved' && !this.approvalDate) {
     this.approvalDate = new Date();
   }
-  
+
   // Set disbursement date when status changes to disbursed
   if (this.isModified('status') && this.status === 'disbursed' && !this.disbursementDate) {
     this.disbursementDate = new Date();
   }
-  
+
   next();
 });
 
@@ -186,7 +174,7 @@ LoanSchema.statics.getTotalLoansGiven = async function () {
       },
     },
   ]);
-  
+
   return result.length > 0 ? result[0] : { totalAmount: 0, loanCount: 0 };
 };
 
@@ -206,7 +194,7 @@ LoanSchema.statics.getOutstandingLoans = async function () {
       },
     },
   ]);
-  
+
   return result.length > 0 ? result[0] : { totalOutstanding: 0, loanCount: 0 };
 };
 
@@ -221,7 +209,7 @@ LoanSchema.statics.getInterestCollected = async function () {
       },
     },
   ]);
-  
+
   return result.length > 0 ? result[0].totalInterest : 0;
 };
 

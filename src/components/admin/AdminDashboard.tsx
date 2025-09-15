@@ -62,8 +62,16 @@ export default function AdminDashboard({ user }: Props) {
     router.push(`?${params.toString()}`);
   };
 
-  const handleNavigateToHistorical = () => {
-    handleTabChange("historical");
+  const handleNavigateToHistorical = (memberId?: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", "historical");
+    if (memberId) {
+      params.set("memberId", memberId);
+    } else {
+      params.delete("memberId");
+    }
+    router.push(`?${params.toString()}`);
+    setActiveTab("historical");
   };
 
   // Common tab trigger classes

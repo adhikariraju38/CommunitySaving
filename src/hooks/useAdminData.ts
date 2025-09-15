@@ -2,13 +2,13 @@
 
 import { useState, useCallback, useRef } from "react";
 import { apiRequest, getLocalStorage } from "@/lib/utils";
-import { 
-  IDashboardStats, 
-  IUser, 
-  ILoan, 
-  IContribution, 
+import {
+  IDashboardStats,
+  IUser,
+  ILoan,
+  IContribution,
   CommunityFinances,
-  PaginatedResponse 
+  PaginatedResponse
 } from "@/types";
 
 // Custom hook for dashboard overview data
@@ -23,11 +23,11 @@ export const useDashboardOverview = () => {
 
   const loadOverviewData = useCallback(async () => {
     if (loadingRef.current) return; // Prevent duplicate calls
-    
+
     loadingRef.current = true;
     setLoading(true);
     setError(null);
-    
+
     try {
       const token = getLocalStorage<string>("token");
       const headers = { Authorization: `Bearer ${token}` };
@@ -76,43 +76,78 @@ export const useDashboardOverview = () => {
   };
 };
 
-// Custom hook for members data
+// Custom hook for members data with pagination
 export const useMembersData = () => {
   const [members, setMembers] = useState<IUser[]>([]);
   const [memberContributionStatus, setMemberContributionStatus] = useState<
     Map<string, { isCurrent: boolean; missingCount: number }>
   >(new Map());
+  const [pagination, setPagination] = useState({
+    current: 1,
+    total: 0,
+    pages: 0,
+    hasNext: false,
+    hasPrev: false,
+    limit: 10
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);
 
-  const loadMembersData = useCallback(async () => {
+  const loadMembersData = useCallback(async (page: number = 1, limit: number = 10) => {
     if (loadingRef.current) return; // Prevent duplicate calls
-    
+
     loadingRef.current = true;
     setLoading(true);
     setError(null);
-    
+
     try {
       const token = getLocalStorage<string>("token");
       const headers = { Authorization: `Bearer ${token}` };
 
-      const result = await apiRequest<PaginatedResponse<IUser>>("/api/users", { headers });
-      
+      // Add pagination parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        sortBy: 'joinDate',
+        sortOrder: 'desc'
+      });
+
+      const result = await apiRequest<PaginatedResponse<IUser>>(`/api/users?${params.toString()}`, { headers });
+
       let membersData: IUser[] = [];
       if (result.success && result.data) {
         if (Array.isArray(result.data.data)) {
           membersData = result.data.data;
+          // Update pagination state
+          if (result.data.pagination) {
+            setPagination({
+              current: result.data.pagination.current,
+              total: result.data.pagination.total,
+              pages: result.data.pagination.pages,
+              hasNext: result.data.pagination.hasNext,
+              hasPrev: result.data.pagination.hasPrev,
+              limit: limit
+            });
+          }
         } else if (Array.isArray(result.data)) {
           membersData = result.data;
+          // If we get a direct array, set pagination for all data on one page
+          setPagination({
+            current: 1,
+            total: membersData.length,
+            pages: 1,
+            hasNext: false,
+            hasPrev: false,
+            limit: membersData.length
+          });
         }
         setMembers(membersData);
 
-        // Load contribution status for members (limit for performance)
+        // Load contribution status for current page members
         const statusMap = new Map();
-        const membersToCheck = membersData.slice(0, 20);
-        
-        const statusPromises = membersToCheck.map(async (member) => {
+
+        const statusPromises = membersData.map(async (member) => {
           try {
             const statusResult = await apiRequest(
               `/api/historical-contributions?userId=${member._id}`,
@@ -140,7 +175,7 @@ export const useMembersData = () => {
             statusMap.set(result.memberId, result.status);
           }
         });
-        
+
         setMemberContributionStatus(statusMap);
       }
     } catch (err) {
@@ -152,12 +187,23 @@ export const useMembersData = () => {
     }
   }, []);
 
+  const goToPage = useCallback((page: number) => {
+    loadMembersData(page, pagination.limit);
+  }, [loadMembersData, pagination.limit]);
+
+  const changePageSize = useCallback((newLimit: number) => {
+    loadMembersData(1, newLimit);
+  }, [loadMembersData]);
+
   return {
     members,
     memberContributionStatus,
+    pagination,
     loading,
     error,
-    loadMembersData
+    loadMembersData,
+    goToPage,
+    changePageSize
   };
 };
 
@@ -170,17 +216,17 @@ export const useCommunityFinances = () => {
 
   const loadCommunityFinances = useCallback(async () => {
     if (loadingRef.current) return; // Prevent duplicate calls
-    
+
     loadingRef.current = true;
     setLoading(true);
     setError(null);
-    
+
     try {
       const token = getLocalStorage<string>("token");
       const headers = { Authorization: `Bearer ${token}` };
 
       const result = await apiRequest<CommunityFinances>("/api/community-finances", { headers });
-      
+
       if (result.success && result.data) {
         setCommunityFinances(result.data);
       }

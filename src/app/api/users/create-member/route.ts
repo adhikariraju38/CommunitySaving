@@ -34,9 +34,10 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
       );
     }
 
-    if (!validatePhone(phone)) {
+    // Phone is optional, but if provided, it must be valid
+    if (phone && !validatePhone(phone)) {
       return NextResponse.json(
-        { success: false, error: 'Valid phone number is required' },
+        { success: false, error: 'Invalid phone number format' },
         { status: 400 }
       );
     }
@@ -50,11 +51,15 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Check if email or phone already exists
+    const orConditions = [{ email: email.toLowerCase().trim() }];
+
+    // Only check phone if it's provided
+    if (phone && phone.trim()) {
+      orConditions.push({ phone: phone.trim() });
+    }
+
     const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase().trim() },
-        { phone: phone.trim() }
-      ]
+      $or: orConditions
     });
 
     if (existingUser) {
@@ -68,16 +73,22 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
     const memberId = await User.generateMemberId();
 
     // Create new approved member
-    const newUser = await User.create({
+    const userData: any = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      phone: phone.trim(),
       password,
       memberId,
       role: 'member',
       status: 'approved', // Directly approved by admin
       isActive: true,
-    });
+    };
+
+    // Only include phone if provided
+    if (phone && phone.trim()) {
+      userData.phone = phone.trim();
+    }
+
+    const newUser = await User.create(userData);
 
     return NextResponse.json({
       success: true,

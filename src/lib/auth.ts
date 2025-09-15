@@ -120,6 +120,10 @@ export function validateEmail(email: string): boolean {
 
 // Phone validation
 export function validatePhone(phone: string): boolean {
+  // If phone is empty, it's valid (since it's optional now)
+  if (!phone || !phone.trim()) {
+    return true;
+  }
   // Basic phone validation - adjust based on your region
   const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
   return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));

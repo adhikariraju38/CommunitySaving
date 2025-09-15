@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectToDatabase from '@/lib/mongodb';
 import Loan from '@/models/Loan';
 import { withAuth, withAdmin, withErrorHandling, AuthenticatedRequest } from '@/middleware/auth';
+import { addDynamicCalculationsToLoan } from '@/lib/loan-calculations';
 
 // GET /api/loans/[id] - Get loan details
 export const GET = withErrorHandling(
@@ -32,9 +33,12 @@ export const GET = withErrorHandling(
       );
     }
 
+    // Apply dynamic calculations to the loan
+    const loanWithDynamicCalculations = addDynamicCalculationsToLoan(loan.toObject());
+
     return NextResponse.json({
       success: true,
-      loan,
+      loan: loanWithDynamicCalculations,
     });
   })
 );
@@ -44,9 +48,9 @@ export const PUT = withErrorHandling(
   withAdmin(async (request: AuthenticatedRequest) => {
     const segments = request.nextUrl.pathname.split('/');
     const loanId = segments[segments.length - 1];
-    
+
     const updates = await request.json();
-    const { 
+    const {
       approvedAmount,
       interestRate,
       status,
@@ -104,7 +108,7 @@ export const PUT = withErrorHandling(
 
     if (status) {
       loan.status = status;
-      
+
       // Set approvedBy when approving
       if (status === 'approved' || status === 'disbursed') {
         loan.approvedBy = new mongoose.Types.ObjectId(request.user.userId);

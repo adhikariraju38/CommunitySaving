@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { useMembersData } from "@/hooks/useAdminData";
+import { Pagination } from "@/components/ui/pagination";
 import { RefreshCw, UserPlus, Users, Edit, Mail, ShieldOff, Settings } from "lucide-react";
 import BulkMemberForm from "@/components/admin/BulkMemberForm";
 import EditMemberForm from "@/components/admin/EditMemberForm";
@@ -29,7 +30,7 @@ import { showToast } from "@/lib/toast";
 import { apiRequest } from "@/lib/utils";
 
 interface MembersTabProps {
-  onNavigateToHistorical: () => void;
+  onNavigateToHistorical: (memberId?: string) => void;
 }
 
 type ViewMode = 'list' | 'bulk-add' | 'individual-add' | 'edit';
@@ -37,8 +38,16 @@ type ViewMode = 'list' | 'bulk-add' | 'individual-add' | 'edit';
 export default function MembersTab({
   onNavigateToHistorical,
 }: MembersTabProps) {
-  const { members, memberContributionStatus, loading, error, loadMembersData } =
-    useMembersData();
+  const {
+    members,
+    memberContributionStatus,
+    pagination,
+    loading,
+    error,
+    loadMembersData,
+    goToPage,
+    changePageSize
+  } = useMembersData();
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingMember, setEditingMember] = useState<IUser | null>(null);
@@ -46,11 +55,11 @@ export default function MembersTab({
 
   // Load data when component mounts
   useEffect(() => {
-    loadMembersData();
+    loadMembersData(1, 10); // Load first page with 10 items per page
   }, [loadMembersData]);
 
   const handleMemberAdded = () => {
-    loadMembersData();
+    loadMembersData(pagination.current, pagination.limit); // Reload current page
     setViewMode('list');
   };
 
@@ -127,7 +136,7 @@ export default function MembersTab({
     return (
       <div className="text-center py-6">
         <p className="text-red-600 mb-2">{error}</p>
-        <Button onClick={loadMembersData}>Retry</Button>
+        <Button onClick={() => loadMembersData(1, 10)}>Retry</Button>
       </div>
     );
   }
@@ -170,7 +179,7 @@ export default function MembersTab({
             Fix DB
           </Button>
           <Button
-            onClick={loadMembersData}
+            onClick={() => loadMembersData(pagination.current, pagination.limit)}
             disabled={loading}
             variant="outline"
             size="sm"
@@ -234,9 +243,13 @@ export default function MembersTab({
                       </TableCell>
                       <TableCell className="max-w-[200px]">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs truncate">{member.phone}</span>
-                          </div>
+                          {member.phone ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs truncate">{member.phone}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">No phone</span>
+                          )}
                           {member.email ? (
                             <div className="flex items-center gap-1">
                               <Mail className="h-3 w-3 text-blue-500" />
@@ -329,7 +342,7 @@ export default function MembersTab({
                             size="sm"
                             variant="outline"
                             className="text-xs whitespace-nowrap"
-                            onClick={onNavigateToHistorical}
+                            onClick={() => onNavigateToHistorical(member._id.toString())}
                           >
                             Contributions
                           </Button>
@@ -352,6 +365,23 @@ export default function MembersTab({
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          {members && members.length > 0 && (
+            <div className="mt-4 border-t pt-4">
+              <Pagination
+                currentPage={pagination.current}
+                totalPages={pagination.pages}
+                totalItems={pagination.total}
+                itemsPerPage={pagination.limit}
+                hasNext={pagination.hasNext}
+                hasPrev={pagination.hasPrev}
+                onPageChange={goToPage}
+                onPageSizeChange={changePageSize}
+                pageSizeOptions={[5, 10, 20, 50]}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

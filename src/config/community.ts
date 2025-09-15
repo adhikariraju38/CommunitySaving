@@ -14,7 +14,7 @@ export const COMMUNITY_CONFIG = {
 
   // Policy descriptions
   POLICIES: {
-    HISTORICAL_CONTRIBUTIONS: 'All members must contribute from community opening date (September 15, 2023) or their join date, whichever is later, up to the current month.',
+    HISTORICAL_CONTRIBUTIONS: 'All members must contribute from community opening date (September 15, 2023) up to the current month, regardless of when they joined.',
     MONTHLY_CONTRIBUTION: 'Monthly contribution of NPR 2,000 is required from all active members.',
     CATCH_UP_POLICY: 'New members must pay all missing contributions from their required start date before becoming fully active.'
   }
@@ -29,8 +29,9 @@ export const getRequiredContributionStartDate = (memberJoinDate: string | Date):
   const joinDate = new Date(memberJoinDate);
   const communityOpeningDate = getCommunityStartDate();
 
-  // Use the later of community opening date or member join date
-  return joinDate > communityOpeningDate ? joinDate : communityOpeningDate;
+  // All members must contribute from community opening date, regardless of when they joined
+  // This ensures fairness - everyone contributes from the same starting point
+  return communityOpeningDate;
 };
 
 export const formatCommunityAge = (): string => {

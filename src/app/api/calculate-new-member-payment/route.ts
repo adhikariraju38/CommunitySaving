@@ -57,9 +57,13 @@ const getHandler = withAuth(async (request: AuthenticatedRequest) => {
             );
         }
 
-        // Calculate months missed
-        const monthsDiff = (joiningDate.getFullYear() - communityStartDate.getFullYear()) * 12 +
-            (joiningDate.getMonth() - communityStartDate.getMonth());
+        // Calculate months missed - using end-of-month policy (exclude current month)
+        const currentDate = new Date();
+        const lastCompletedMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+        
+        // Calculate from community start to last completed month
+        const monthsDiff = (lastCompletedMonth.getFullYear() - communityStartDate.getFullYear()) * 12 +
+            (lastCompletedMonth.getMonth() - communityStartDate.getMonth()) + 1;
 
         if (monthsDiff <= 0) {
             return NextResponse.json(

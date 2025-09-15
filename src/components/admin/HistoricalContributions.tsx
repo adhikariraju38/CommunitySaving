@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +69,7 @@ interface HistoricalContributionData {
 }
 
 export default function HistoricalContributions() {
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userContributionData, setUserContributionData] =
@@ -85,9 +88,19 @@ export default function HistoricalContributions() {
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
-      const result = await apiRequest<User[]>("/api/users");
+      // Get all users with a high limit and sort by name for better UX
+      const params = new URLSearchParams({
+        limit: '1000', // High limit to get all users
+        sortBy: 'name',
+        sortOrder: 'asc'
+      });
+      const result = await apiRequest<any>(`/api/users?${params.toString()}`);
       if (result.success && result.data) {
-        setUsers(result.data.filter((u) => u.memberId)); // Only users with member IDs
+        // Handle both direct array and paginated response
+        const usersArray = Array.isArray(result.data) ? result.data : result.data.data;
+        if (usersArray) {
+          setUsers(usersArray.filter((u: User) => u.memberId)); // Only users with member IDs
+        }
       }
     } catch (error) {
       console.error("Error loading users:", error);
@@ -96,10 +109,19 @@ export default function HistoricalContributions() {
     }
   }, []);
 
-  // Load users on component mount
+  // Load users on component mount and auto-select from URL
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  // Auto-select member from URL parameter
+  useEffect(() => {
+    const memberIdFromUrl = searchParams.get('memberId');
+    if (memberIdFromUrl && memberIdFromUrl !== selectedUserId) {
+      setSelectedUserId(memberIdFromUrl);
+      loadUserContributionStatus(memberIdFromUrl);
+    }
+  }, [searchParams, selectedUserId]);
 
   const loadUserContributionStatus = async (userId: string) => {
     if (!userId) return;
@@ -223,7 +245,7 @@ export default function HistoricalContributions() {
         <div>
           <h2 className="text-2xl font-bold">Historical Contributions</h2>
           <p className="text-muted-foreground">
-            Manage catch-up contributions for new members. Members must
+            Manage catch-up contributions for all members. All members must
             contribute from{" "}
             <span className="font-semibold">
               {COMMUNITY_CONFIG.OPENING_DATE.toLocaleDateString("en-US", {
@@ -232,7 +254,7 @@ export default function HistoricalContributions() {
                 year: "numeric",
               })}
             </span>{" "}
-            (community opening) or their join date, whichever is later.
+            (community opening date) regardless of when they joined.
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             Community has been active for {formatCommunityAge()}
@@ -241,12 +263,10 @@ export default function HistoricalContributions() {
             <p className="font-medium text-blue-900">Policy Examples:</p>
             <ul className="text-blue-800 mt-1 space-y-1">
               <li>
-                • Member joined before Sept 15, 2023 → Contributes from Sept 15,
-                2023
+                • All members contribute from Sept 15, 2023 (community opening)
               </li>
               <li>
-                • Member joined after Sept 15, 2023 → Contributes from their
-                join date
+                • New members must catch up on all months from Sept 15, 2023
               </li>
               <li>• All members contribute up to current month</li>
             </ul>
@@ -264,27 +284,28 @@ export default function HistoricalContributions() {
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="user-select">Member</Label>
                 {usersLoading ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading users...
+                  <div className="space-y-2">
+                    <Label htmlFor="user-select">Member</Label>
+                    <div className="text-sm text-muted-foreground">
+                      Loading users...
+                    </div>
                   </div>
                 ) : (
-                  <Select
+                  <SearchableSelect
+                    id="user-select"
+                    label="Member"
                     value={selectedUserId}
-                    onValueChange={handleUserSelect}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user._id} value={user._id}>
-                          {user.name} ({user.memberId})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={handleUserSelect}
+                    options={users.map((user) => ({
+                      value: user._id,
+                      label: `${user.name} (${user.memberId})`,
+                      searchText: `${user.name} ${user.memberId} ${user.email}`
+                    }))}
+                    placeholder="Select a member"
+                    searchPlaceholder="Search by name, member ID, or email..."
+                    emptyText="No members found"
+                  />
                 )}
               </div>
             </div>
@@ -317,8 +338,8 @@ export default function HistoricalContributions() {
                     <div className="text-center p-4 border rounded-lg">
                       <div
                         className={`text-2xl font-bold ${userContributionData.contributionStatus.isCurrent
-                            ? "text-green-600"
-                            : "text-red-600"
+                          ? "text-green-600"
+                          : "text-red-600"
                           }`}
                       >
                         {userContributionData.contributionStatus.isCurrent

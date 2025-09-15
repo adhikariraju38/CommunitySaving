@@ -68,24 +68,26 @@ const putHandler = withAuth(async (request: AuthenticatedRequest) => {
         }
 
         if (updateData.phone !== undefined) {
-            if (!updateData.phone || !validatePhone(updateData.phone)) {
+            if (updateData.phone && !validatePhone(updateData.phone)) {
                 return NextResponse.json(
-                    { success: false, error: 'Valid phone number is required' },
+                    { success: false, error: 'Invalid phone number format' },
                     { status: 400 }
                 );
             }
 
-            // Check if phone already exists (excluding current user)
-            const existingPhoneUser = await User.findOne({
-                phone: updateData.phone.trim(),
-                _id: { $ne: id }
-            });
+            // Check if phone already exists (excluding current user, and only if phone is provided)
+            if (updateData.phone && updateData.phone.trim()) {
+                const existingPhoneUser = await User.findOne({
+                    phone: updateData.phone.trim(),
+                    _id: { $ne: id }
+                });
 
-            if (existingPhoneUser) {
-                return NextResponse.json(
-                    { success: false, error: 'Phone number already exists' },
-                    { status: 409 }
-                );
+                if (existingPhoneUser) {
+                    return NextResponse.json(
+                        { success: false, error: 'Phone number already exists' },
+                        { status: 409 }
+                    );
+                }
             }
         }
 

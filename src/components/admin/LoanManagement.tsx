@@ -34,6 +34,8 @@ import { UserListSkeleton } from "@/components/ui/loading-skeletons";
 import { showToast, loanToasts } from "@/lib/toast";
 import { CalendarIcon, Plus, Eye, DollarSign, CheckSquare } from "lucide-react";
 import LoanDetails from "@/components/shared/LoanDetails";
+import NepaliDatePicker from "@/components/ui/nepali-date-picker";
+import SearchableSelect from "@/components/ui/searchable-select";
 
 interface User {
   _id: string;
@@ -92,6 +94,7 @@ export default function LoanManagement({ user }: Props) {
 
   // Direct loan creation states
   const [showCreateLoanForm, setShowCreateLoanForm] = useState(false);
+  const [recalculatingInterest, setRecalculatingInterest] = useState(false);
   const [createLoanData, setCreateLoanData] = useState({
     userId: "",
     requestedAmount: "",
@@ -162,9 +165,19 @@ export default function LoanManagement({ user }: Props) {
 
   const loadUsers = async () => {
     try {
-      const result = await apiRequest<User[]>("/api/users");
+      // Get all users with a high limit and sort by name for better UX
+      const params = new URLSearchParams({
+        limit: '1000', // High limit to get all users
+        sortBy: 'name',
+        sortOrder: 'asc'
+      });
+      const result = await apiRequest<any>(`/api/users?${params.toString()}`);
       if (result.success && result.data) {
-        setUsers(result.data.filter((u: User) => u.isActive));
+        // Handle both direct array and paginated response
+        const usersArray = Array.isArray(result.data) ? result.data : result.data.data;
+        if (usersArray) {
+          setUsers(usersArray.filter((u: User) => u.isActive && u.memberId));
+        }
       }
     } catch (error) {
       console.error("Error loading users:", error);
@@ -502,8 +515,7 @@ export default function LoanManagement({ user }: Props) {
           settlementType === "interest-only" ? "Interest-only" : "Full";
         showToast.success(
           `${settlementTypeName} settlement completed`,
-          `${formatCurrency(paymentAmount)} settlement processed for ${
-            currentLoan.userId.name
+          `${formatCurrency(paymentAmount)} settlement processed for ${currentLoan.userId.name
           }`
         );
       } else {
@@ -556,6 +568,38 @@ export default function LoanManagement({ user }: Props) {
     }
   };
 
+  const recalculateAllLoanInterest = async () => {
+    setRecalculatingInterest(true);
+    try {
+      const result = await apiRequest<{ updatedCount: number, results: any[] }>('/api/admin/recalculate-loan-interest', {
+        method: 'POST'
+      });
+
+      if (result.success && result.data) {
+        showToast.success(
+          "Interest recalculation completed",
+          `Updated ${result.data.updatedCount} loans with correct interest calculations`
+        );
+        // Reload data to show updated calculations
+        loadPendingLoans();
+        loadActiveLoans();
+      } else {
+        showToast.error(
+          "Failed to recalculate interest",
+          result.message || "Please try again"
+        );
+      }
+    } catch (error) {
+      console.error("Error recalculating loan interest:", error);
+      showToast.error(
+        "Error recalculating interest",
+        "An error occurred while recalculating loan interest"
+      );
+    } finally {
+      setRecalculatingInterest(false);
+    }
+  };
+
   if (loading) {
     return <UserListSkeleton />;
   }
@@ -570,13 +614,23 @@ export default function LoanManagement({ user }: Props) {
               Manage loan applications and create direct loans for members
             </p>
           </div>
-          <Button
-            onClick={() => setShowCreateLoanForm(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Direct Loan
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={recalculateAllLoanInterest}
+              variant="outline"
+              disabled={recalculatingInterest}
+              className="flex items-center gap-2"
+            >
+              {recalculatingInterest ? "Recalculating..." : "Recalculate Interest"}
+            </Button>
+            <Button
+              onClick={() => setShowCreateLoanForm(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Direct Loan
+            </Button>
+          </div>
         </div>
 
         <Tabs
@@ -873,24 +927,23 @@ export default function LoanManagement({ user }: Props) {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="create-user">Member *</Label>
-                    <Select
+                    <SearchableSelect
+                      id="create-user"
+                      label="Member"
                       value={createLoanData.userId}
-                      onValueChange={(value) =>
+                      onChange={(value) =>
                         setCreateLoanData({ ...createLoanData, userId: value })
                       }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select member" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user._id} value={user._id}>
-                            {user.name} ({user.memberId})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={users.map((user) => ({
+                        value: user._id,
+                        label: `${user.name} (${user.memberId})`,
+                        searchText: `${user.name} ${user.memberId} ${user.email}`
+                      }))}
+                      placeholder="Select member"
+                      searchPlaceholder="Search by name, member ID, or email..."
+                      required
+                      emptyText="No members found"
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -949,17 +1002,18 @@ export default function LoanManagement({ user }: Props) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="create-approval-date">Approval Date</Label>
-                    <Input
+                    <NepaliDatePicker
                       id="create-approval-date"
-                      type="date"
+                      label="Approval Date"
                       value={createLoanData.approvalDate}
-                      onChange={(e) =>
+                      onChange={(adDate) =>
                         setCreateLoanData({
                           ...createLoanData,
-                          approvalDate: e.target.value,
+                          approvalDate: adDate,
                         })
                       }
+                      placeholder="Select approval date"
+                      showTodayButton={true}
                     />
                     <p className="text-xs text-muted-foreground">
                       Leave empty to use current date
@@ -1151,7 +1205,7 @@ export default function LoanManagement({ user }: Props) {
                     <span>
                       {formatCurrencyLocal(
                         settlementLoan.approvedAmount ||
-                          settlementLoan.requestedAmount
+                        settlementLoan.requestedAmount
                       )}
                     </span>
                   </div>
@@ -1165,7 +1219,7 @@ export default function LoanManagement({ user }: Props) {
                       {formatCurrencyLocal(
                         (settlementLoan.approvedAmount ||
                           settlementLoan.requestedAmount) *
-                          (settlementLoan.interestRate / 100)
+                        (settlementLoan.interestRate / 100)
                       )}
                     </span>
                   </div>
@@ -1197,7 +1251,7 @@ export default function LoanManagement({ user }: Props) {
                           {formatCurrencyLocal(
                             (settlementLoan.approvedAmount ||
                               settlementLoan.requestedAmount) *
-                              (settlementLoan.interestRate / 100)
+                            (settlementLoan.interestRate / 100)
                           )}
                         </p>
                       </div>
@@ -1227,9 +1281,9 @@ export default function LoanManagement({ user }: Props) {
                           {formatCurrencyLocal(
                             (settlementLoan.approvedAmount ||
                               settlementLoan.requestedAmount) +
-                              (settlementLoan.approvedAmount ||
-                                settlementLoan.requestedAmount) *
-                                (settlementLoan.interestRate / 100)
+                            (settlementLoan.approvedAmount ||
+                              settlementLoan.requestedAmount) *
+                            (settlementLoan.interestRate / 100)
                           )}
                         </p>
                       </div>

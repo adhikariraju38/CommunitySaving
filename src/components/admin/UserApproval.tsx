@@ -153,8 +153,12 @@ export default function UserApproval({ onMemberAdded }: Props) {
       errors.email = "Please provide a valid email";
     }
 
-    if (!addMemberData.phone.trim()) {
-      errors.phone = "Phone number is required";
+    // Phone is optional, but if provided, it should be valid
+    if (addMemberData.phone.trim()) {
+      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,20}$/;
+      if (!phoneRegex.test(addMemberData.phone.trim())) {
+        errors.phone = "Please enter a valid phone number";
+      }
     }
 
     if (!addMemberData.password) {

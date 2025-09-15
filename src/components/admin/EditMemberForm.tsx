@@ -59,10 +59,8 @@ export default function EditMemberForm({ member, onSuccess, onCancel }: EditMemb
             newErrors.name = 'Name is required';
         }
 
-        // Phone validation
-        if (!formData.phone.trim()) {
-            newErrors.phone = 'Phone number is required';
-        } else {
+        // Phone validation (optional but must be valid if provided)
+        if (formData.phone.trim()) {
             const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,20}$/;
             if (!phoneRegex.test(formData.phone.trim())) {
                 newErrors.phone = 'Please enter a valid phone number';
@@ -115,8 +113,8 @@ export default function EditMemberForm({ member, onSuccess, onCancel }: EditMemb
                 updateData.email = formData.email.trim() || undefined;
             }
 
-            if (formData.phone.trim() !== member.phone) {
-                updateData.phone = formData.phone.trim();
+            if (formData.phone.trim() !== (member.phone || '')) {
+                updateData.phone = formData.phone.trim() || undefined;
             }
 
             if (formData.password) {

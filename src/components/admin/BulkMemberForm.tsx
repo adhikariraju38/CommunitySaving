@@ -74,9 +74,8 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
                 errors.push('Name is required');
             }
 
-            if (!member.phone.trim()) {
-                errors.push('Phone is required');
-            } else {
+            // Phone is now optional, but if provided, it must be valid
+            if (member.phone && member.phone.trim()) {
                 // Basic phone validation
                 const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,20}$/;
                 if (!phoneRegex.test(member.phone.trim())) {
@@ -106,11 +105,11 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
 
         lines.forEach((line, index) => {
             const parts = line.split(',').map(part => part.trim());
-            if (parts.length >= 2) {
+            if (parts.length >= 1 && parts[0]) { // At least name is required
                 parsedMembers.push({
                     id: String(index + 1),
                     name: parts[0],
-                    phone: parts[1]
+                    phone: parts.length >= 2 ? parts[1] : '' // Phone is optional
                 });
             }
         });
@@ -121,12 +120,12 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
             setShowTextInput(false);
             showToast.success(`Parsed ${parsedMembers.length} members from text`);
         } else {
-            showToast.error('No valid members found in the text. Use format: Name, Phone (one per line)');
+            showToast.error('No valid members found in the text. Use format: Name, Phone (one per line). Phone is optional.');
         }
     };
 
     const downloadTemplate = () => {
-        const csvContent = "Name,Phone\nJohn Doe,+1234567890\nJane Smith,+1234567891";
+        const csvContent = "Name,Phone\nJohn Doe,+1234567890\nJane Smith,\nBob Wilson,+1234567892";
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -146,11 +145,19 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
 
         try {
             const validMembers = members
-                .filter(member => member.name.trim() && member.phone.trim())
-                .map(member => ({
-                    name: member.name.trim(),
-                    phone: member.phone.trim()
-                }));
+                .filter(member => member.name.trim()) // Only name is required now
+                .map(member => {
+                    const memberData: any = {
+                        name: member.name.trim()
+                    };
+
+                    // Only include phone if it's provided and not empty
+                    if (member.phone && member.phone.trim()) {
+                        memberData.phone = member.phone.trim();
+                    }
+
+                    return memberData;
+                });
 
             const response = await fetch('/api/users/bulk-create', {
                 method: 'POST',
@@ -180,7 +187,7 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
         }
     };
 
-    const validMemberCount = members.filter(m => m.name.trim() && m.phone.trim() && !m.error).length;
+    const validMemberCount = members.filter(m => m.name.trim() && !m.error).length;
 
     return (
         <Card className="w-full max-w-4xl mx-auto">
@@ -189,7 +196,7 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
                     <div>
                         <CardTitle>Bulk Add Members</CardTitle>
                         <CardDescription>
-                            Add multiple members without email/password. They can be given login access later.
+                            Add multiple members without email/password. Phone numbers are optional. They can be given login access later.
                         </CardDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={onCancel}>
@@ -238,12 +245,12 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
                         <CardHeader>
                             <CardTitle className="text-lg">Bulk Import from Text</CardTitle>
                             <CardDescription>
-                                Paste member data in CSV format: Name, Phone (one member per line)
+                                Paste member data in CSV format: Name, Phone (one member per line). Phone is optional - leave empty if not available.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <Textarea
-                                placeholder="John Doe, +1234567890&#10;Jane Smith, +1234567891&#10;..."
+                                placeholder="John Doe, +1234567890&#10;Jane Smith, &#10;Bob Wilson, +1234567892&#10;..."
                                 value={textInput}
                                 onChange={(e) => setTextInput(e.target.value)}
                                 rows={6}
@@ -265,8 +272,8 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[40%]">Name</TableHead>
-                                <TableHead className="w-[40%]">Phone</TableHead>
+                                <TableHead className="w-[40%]">Name *</TableHead>
+                                <TableHead className="w-[40%]">Phone (Optional)</TableHead>
                                 <TableHead className="w-[20%]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -289,13 +296,13 @@ export default function BulkMemberForm({ onSuccess, onCancel }: BulkMemberFormPr
                                     <TableCell>
                                         <div className="space-y-1">
                                             <Input
-                                                placeholder="Enter phone number"
-                                                value={member.phone}
+                                                placeholder="Enter phone number (optional)"
+                                                value={member.phone || ''}
                                                 onChange={(e) => updateMember(member.id, 'phone', e.target.value)}
                                                 className={member.error ? 'border-red-300' : ''}
                                             />
                                             {member.error && member.error.includes('phone') && (
-                                                <p className="text-xs text-red-600">Valid phone required</p>
+                                                <p className="text-xs text-red-600">Invalid phone format</p>
                                             )}
                                             {member.error && member.error.includes('Duplicate') && (
                                                 <p className="text-xs text-red-600">Duplicate phone number</p>

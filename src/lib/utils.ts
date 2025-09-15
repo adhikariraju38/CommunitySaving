@@ -37,9 +37,9 @@ export function formatDateTime(date: Date | string): string {
 export function getMonthName(monthStr: string): string {
   const [year, month] = monthStr.split('-');
   const date = new Date(parseInt(year), parseInt(month) - 1);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long' 
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long'
   });
 }
 
@@ -94,7 +94,7 @@ export function validateRequired(value: any, fieldName: string): string | null {
 
 export function validateEmail(email: string): string | null {
   if (!email) return 'Email is required';
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return 'Please enter a valid email address';
@@ -102,9 +102,11 @@ export function validateEmail(email: string): string | null {
   return null;
 }
 
-export function validatePhone(phone: string): string | null {
-  if (!phone) return 'Phone number is required';
-  
+export function validatePhone(phone: string, required: boolean = true): string | null {
+  if (!phone) {
+    return required ? 'Phone number is required' : null;
+  }
+
   const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
   if (!phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''))) {
     return 'Please enter a valid phone number';
@@ -113,25 +115,25 @@ export function validatePhone(phone: string): string | null {
 }
 
 export function validateAmount(
-  amount: number | string, 
-  min: number = 0, 
+  amount: number | string,
+  min: number = 0,
   max: number = Infinity,
   fieldName: string = 'Amount'
 ): string | null {
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  
+
   if (isNaN(numAmount)) {
     return `${fieldName} must be a valid number`;
   }
-  
+
   if (numAmount < min) {
     return `${fieldName} must be at least ${formatCurrency(min)}`;
   }
-  
+
   if (numAmount > max) {
     return `${fieldName} cannot exceed ${formatCurrency(max)}`;
   }
-  
+
   return null;
 }
 
@@ -166,15 +168,15 @@ export async function apiRequest<T>(
       data = await response.json();
     } catch (jsonError) {
       // If JSON parsing fails, create a fallback error response
-      data = { 
-        success: false, 
-        message: `HTTP ${response.status}: ${response.statusText}` 
+      data = {
+        success: false,
+        message: `HTTP ${response.status}: ${response.statusText}`
       };
     }
-    
+
     if (!response.ok) {
-      const errorMessage = (data && typeof data === 'object' && data.message) 
-        ? data.message 
+      const errorMessage = (data && typeof data === 'object' && data.message)
+        ? data.message
         : `HTTP ${response.status}: ${response.statusText}`;
       return {
         success: false,

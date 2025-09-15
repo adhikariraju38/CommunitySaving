@@ -6,7 +6,7 @@ export interface IUser extends Document {
   name: string;
   email?: string; // Optional for bulk-added members
   password?: string; // Optional for bulk-added members
-  phone: string;
+  phone?: string; // Optional for bulk-added members
   memberId: string;
   role: 'admin' | 'member';
   status: 'pending' | 'approved' | 'rejected';
@@ -29,7 +29,7 @@ export interface IUserRegister extends Omit<IUser, '_id' | 'comparePassword' | '
 // Bulk Member Creation Types
 export interface IBulkMemberData {
   name: string;
-  phone: string;
+  phone?: string; // Made optional for bulk creation
 }
 
 export interface IBulkMemberCreate {

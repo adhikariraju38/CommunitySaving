@@ -9,7 +9,7 @@ import { UserFilter, PaginatedResponse, IUser } from '@/types';
 export const GET = withErrorHandling(
   withAdmin(async (request: AuthenticatedRequest) => {
     const { searchParams } = new URL(request.url);
-    
+
     const filters: UserFilter = {
       page: parseInt(searchParams.get('page') || '1'),
       limit: Math.min(parseInt(searchParams.get('limit') || '10'), 50), // Max 50 per page
@@ -27,19 +27,19 @@ export const GET = withErrorHandling(
 
     // Build query
     const query: any = {};
-    
+
     if (filters.role) {
       query.role = filters.role;
     }
-    
+
     if (filters.status) {
       query.status = filters.status;
     }
-    
+
     if (filters.isActive !== undefined) {
       query.isActive = filters.isActive;
     }
-    
+
     if (filters.search) {
       query.$or = [
         { name: { $regex: filters.search, $options: 'i' } },
@@ -98,10 +98,10 @@ export const POST = withErrorHandling(
   withAdmin(async (request: AuthenticatedRequest) => {
     const { name, email, password, phone, role } = await request.json();
 
-    // Validation
-    if (!name || !email || !password || !phone) {
+    // Validation (phone is optional)
+    if (!name || !email || !password) {
       return NextResponse.json(
-        { success: false, message: 'Name, email, password, and phone are required' },
+        { success: false, message: 'Name, email, and password are required' },
         { status: 400 }
       );
     }
@@ -121,7 +121,8 @@ export const POST = withErrorHandling(
       );
     }
 
-    if (!validatePhone(phone)) {
+    // Phone is optional, but if provided, it must be valid
+    if (phone && !validatePhone(phone)) {
       return NextResponse.json(
         { success: false, message: 'Invalid phone number format' },
         { status: 400 }
@@ -138,11 +139,15 @@ export const POST = withErrorHandling(
     await connectToDatabase();
 
     // Check if user already exists
+    const orConditions = [{ email: email.toLowerCase().trim() }];
+
+    // Only check phone if it's provided
+    if (phone && phone.trim()) {
+      orConditions.push({ phone: phone.trim() });
+    }
+
     const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase().trim() },
-        { phone: phone.trim() }
-      ]
+      $or: orConditions
     });
 
     if (existingUser) {
@@ -160,7 +165,7 @@ export const POST = withErrorHandling(
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password,
-      phone: phone.trim(),
+      ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
       memberId,
       role: role || 'member',
       isActive: true,

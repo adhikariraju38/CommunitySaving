@@ -36,7 +36,7 @@ const UserSchema: Schema = new Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
+      required: false, // Made optional for bulk-added members
       trim: true,
       maxlength: [20, 'Phone number cannot exceed 20 characters'],
     },
@@ -89,9 +89,7 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-// Index for better query performance
-UserSchema.index({ email: 1 }, { unique: true, sparse: true }); // Sparse unique index allows multiple null values
-UserSchema.index({ memberId: 1 }, { unique: true });
+// Index for better query performance (email and memberId unique indexes are already defined in schema)
 UserSchema.index({ role: 1, isActive: 1 });
 
 // Pre-save middleware to hash password and update hasLoginAccess

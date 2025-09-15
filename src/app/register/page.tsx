@@ -67,10 +67,12 @@ export default function RegisterPage() {
       newErrors.email = validateEmail(formData.email)!;
     }
 
-    if (!formData.phone) {
-      newErrors.phone = "Phone number is required";
-    } else if (validatePhone(formData.phone)) {
-      newErrors.phone = validatePhone(formData.phone)!;
+    // Phone is optional, but if provided, it should be valid
+    if (formData.phone && formData.phone.trim()) {
+      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,20}$/;
+      if (!phoneRegex.test(formData.phone.trim())) {
+        newErrors.phone = "Please enter a valid phone number";
+      }
     }
 
     if (!formData.password) {
