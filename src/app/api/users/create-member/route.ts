@@ -51,7 +51,7 @@ const postHandler = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Check if email or phone already exists
-    const orConditions = [{ email: email.toLowerCase().trim() }];
+    const orConditions: Array<{ email?: string; phone?: string }> = [{ email: email.toLowerCase().trim() }];
 
     // Only check phone if it's provided
     if (phone && phone.trim()) {

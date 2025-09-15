@@ -139,7 +139,7 @@ export const POST = withErrorHandling(
     await connectToDatabase();
 
     // Check if user already exists
-    const orConditions = [{ email: email.toLowerCase().trim() }];
+    const orConditions: Array<{ email?: string; phone?: string }> = [{ email: email.toLowerCase().trim() }];
 
     // Only check phone if it's provided
     if (phone && phone.trim()) {

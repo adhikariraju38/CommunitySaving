@@ -20,6 +20,11 @@ export const POST = withErrorHandling(
             const results: any[] = [];
 
             for (const loan of loans) {
+                // Skip loans without approved amount or approval date (shouldn't happen due to query filter)
+                if (!loan.approvedAmount || loan.approvedAmount <= 0 || !loan.approvalDate) {
+                    continue;
+                }
+
                 const oldTotalDue = loan.totalAmountDue;
                 const oldInterest = oldTotalDue - loan.approvedAmount;
 
