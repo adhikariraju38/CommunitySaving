@@ -18,8 +18,9 @@ const UserSchema: Schema = new Schema(
     },
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      required: false, // Made optional for bulk-added members
       unique: true,
+      sparse: true, // Allow multiple null values
       lowercase: true,
       trim: true,
       match: [
@@ -29,7 +30,7 @@ const UserSchema: Schema = new Schema(
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: false, // Made optional for bulk-added members
       minlength: [6, 'Password must be at least 6 characters'],
       select: false, // Don't include password in queries by default
     },
@@ -62,6 +63,10 @@ const UserSchema: Schema = new Schema(
       type: Boolean,
       default: true,
     },
+    hasLoginAccess: {
+      type: Boolean,
+      default: false, // True only when both email and password are provided
+    },
     joinDate: {
       type: Date,
       default: Date.now,
@@ -85,21 +90,26 @@ const UserSchema: Schema = new Schema(
 );
 
 // Index for better query performance
-UserSchema.index({ email: 1 });
-UserSchema.index({ memberId: 1 });
+UserSchema.index({ email: 1 }, { unique: true, sparse: true }); // Sparse unique index allows multiple null values
+UserSchema.index({ memberId: 1 }, { unique: true });
 UserSchema.index({ role: 1, isActive: 1 });
 
-// Pre-save middleware to hash password
+// Pre-save middleware to hash password and update hasLoginAccess
 UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  // Update hasLoginAccess based on email and password presence
+  this.hasLoginAccess = !!(this.email && this.password);
 
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(String(this.password), salt);
-    next();
-  } catch (error: any) {
-    next(error);
+  // Hash password if it's modified and exists
+  if (this.isModified('password') && this.password) {
+    try {
+      const salt = await bcrypt.genSalt(12);
+      this.password = await bcrypt.hash(String(this.password), salt);
+    } catch (error: any) {
+      return next(error);
+    }
   }
+
+  next();
 });
 
 // Instance method to compare password
@@ -118,7 +128,7 @@ UserSchema.statics.findByEmail = function (email: string) {
 UserSchema.statics.generateMemberId = async function (): Promise<string> {
   const count = await this.countDocuments();
   const memberId = `CSL${String(count + 1).padStart(4, '0')}`;
-  
+
   // Check if ID already exists (edge case)
   const existingUser = await this.findOne({ memberId });
   if (existingUser) {
@@ -126,7 +136,7 @@ UserSchema.statics.generateMemberId = async function (): Promise<string> {
     const timestamp = Date.now().toString().slice(-4);
     return `CSL${timestamp}`;
   }
-  
+
   return memberId;
 };
 

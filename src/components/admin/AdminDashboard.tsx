@@ -8,6 +8,8 @@ import ContributionTracking from "./ContributionTracking";
 import UserApproval from "./UserApproval";
 import ReportGeneration from "./ReportGeneration";
 import HistoricalContributions from "./HistoricalContributions";
+import HistoricalInterestManager from "./HistoricalInterestManager";
+import NewMemberCalculator from "./NewMemberCalculator";
 import OverviewTab from "./tabs/OverviewTab";
 import MembersTab from "./tabs/MembersTab";
 import CommunityFinancesTab from "./tabs/CommunityFinancesTab";
@@ -41,9 +43,11 @@ export default function AdminDashboard({ user }: Props) {
         "contributions",
         "members",
         "approval",
-        "reports",
+        // "reports", // Commented out as requested
         "finances",
         "historical",
+        "historical-interest",
+        "calculator",
       ].includes(tabParam)
     ) {
       setActiveTab(tabParam);
@@ -101,8 +105,12 @@ export default function AdminDashboard({ user }: Props) {
               <span className="sm:hidden">Approval</span>
               <span className="hidden sm:inline">User Approval</span>
             </TabsTrigger>
-            <TabsTrigger value="reports" className={tabTriggerClasses}>
+            {/* <TabsTrigger value="reports" className={tabTriggerClasses}>
               Reports
+            </TabsTrigger> */}
+            <TabsTrigger value="calculator" className={tabTriggerClasses}>
+              <span className="sm:hidden">Calculator</span>
+              <span className="hidden sm:inline">New Member Calculator</span>
             </TabsTrigger>
             <TabsTrigger value="finances" className={tabTriggerClasses}>
               <span className="sm:hidden">Finances</span>
@@ -111,6 +119,10 @@ export default function AdminDashboard({ user }: Props) {
             <TabsTrigger value="historical" className={tabTriggerClasses}>
               <span className="sm:hidden">Historical</span>
               <span className="hidden sm:inline">Historical Contributions</span>
+            </TabsTrigger>
+            <TabsTrigger value="historical-interest" className={tabTriggerClasses}>
+              <span className="sm:hidden">Interest</span>
+              <span className="hidden sm:inline">Historical Interest</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -140,9 +152,14 @@ export default function AdminDashboard({ user }: Props) {
           <UserApproval />
         </TabsContent>
 
-        {/* Reports Tab */}
-        <TabsContent value="reports" className="animate-fade-in">
+        {/* Reports Tab - Commented out as requested */}
+        {/* <TabsContent value="reports" className="animate-fade-in">
           <ReportGeneration />
+        </TabsContent> */}
+
+        {/* New Member Calculator Tab */}
+        <TabsContent value="calculator" className="animate-fade-in">
+          <NewMemberCalculator />
         </TabsContent>
 
         {/* Community Finances Tab */}
@@ -153,6 +170,11 @@ export default function AdminDashboard({ user }: Props) {
         {/* Historical Contributions Tab */}
         <TabsContent value="historical" className="animate-fade-in">
           <HistoricalContributions />
+        </TabsContent>
+
+        {/* Historical Interest Tab */}
+        <TabsContent value="historical-interest" className="animate-fade-in">
+          <HistoricalInterestManager />
         </TabsContent>
       </Tabs>
     </div>

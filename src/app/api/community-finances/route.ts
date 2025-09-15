@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Contribution from '@/models/Contribution';
 import Loan from '@/models/Loan';
 import Repayment from '@/models/Repayment';
+import HistoricalInterest from '@/models/HistoricalInterest';
 import { withAdmin, withErrorHandling, AuthenticatedRequest } from '@/middleware/auth';
 import { CommunityFinances, LoanSummary } from '@/types';
 
@@ -15,16 +16,19 @@ export const GET = withErrorHandling(
     const [
       // Total contributions all time
       totalContributionsResult,
-      
+
       // Active loans with details
       activeLoansResult,
-      
+
       // All loans for loan summaries
       allLoansResult,
-      
-      // Total interest collected
+
+      // Total interest collected from repayments
       totalInterestResult,
-      
+
+      // Historical interest collected
+      historicalInterestResult,
+
       // Monthly financial history (last 12 months)
       monthlyHistoryResult,
     ] = await Promise.all([
@@ -33,14 +37,14 @@ export const GET = withErrorHandling(
         { $match: { paidStatus: 'paid' } },
         { $group: { _id: null, total: { $sum: '$amount' } } }
       ]),
-      
+
       // Active loans with principals
       Loan.aggregate([
-        { 
-          $match: { 
+        {
+          $match: {
             status: { $in: ['approved', 'disbursed'] },
             remainingBalance: { $gt: 0 }
-          } 
+          }
         },
         {
           $group: {
@@ -50,7 +54,7 @@ export const GET = withErrorHandling(
           }
         }
       ]),
-      
+
       // All loans with user details for loan summaries
       Loan.find({
         status: { $in: ['approved', 'disbursed', 'completed'] },
@@ -59,7 +63,7 @@ export const GET = withErrorHandling(
         .populate('userId', 'name memberId')
         .populate('repayments')
         .lean(),
-      
+
       // Total interest collected from repayments
       Repayment.aggregate([
         {
@@ -69,16 +73,23 @@ export const GET = withErrorHandling(
           }
         }
       ]),
-      
+
+      // Historical interest collected
+      HistoricalInterest.getTotalHistoricalInterest(),
+
       // Monthly history for last 12 months
       getMonthlyFinancialHistory()
     ]);
 
     const totalContributions = totalContributionsResult[0]?.total || 0;
     const activeLoansPrincipal = activeLoansResult[0]?.totalPrincipal || 0;
-    const totalInterestCollected = totalInterestResult[0]?.totalInterest || 0;
+    const totalInterestFromRepayments = totalInterestResult[0]?.totalInterest || 0;
+    const historicalInterest = historicalInterestResult || 0;
 
-    // Calculate available funds (contributions + interest earned - active loan principals)
+    // Total interest collected includes both repayment interest and historical interest
+    const totalInterestCollected = totalInterestFromRepayments + historicalInterest;
+
+    // Calculate available funds (contributions + all interest earned - active loan principals)
     const availableLiquidFunds = totalContributions + totalInterestCollected - activeLoansPrincipal;
 
     // Calculate expected annual interest from active loans
@@ -134,7 +145,7 @@ export const GET = withErrorHandling(
 async function getMonthlyFinancialHistory() {
   const months = [];
   const now = new Date();
-  
+
   // Get last 12 months
   for (let i = 11; i >= 0; i--) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -142,20 +153,20 @@ async function getMonthlyFinancialHistory() {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
 
-    const [contributions, loansGiven, interestCollected] = await Promise.all([
+    const [contributions, loansGiven, interestCollected, historicalInterestForMonth] = await Promise.all([
       // Contributions for this month
       Contribution.aggregate([
-        { 
-          $match: { 
+        {
+          $match: {
             month: monthStr,
-            paidStatus: 'paid' 
-          } 
+            paidStatus: 'paid'
+          }
         },
-        { 
-          $group: { 
-            _id: null, 
-            total: { $sum: '$amount' } 
-          } 
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
         }
       ]),
 
@@ -178,7 +189,7 @@ async function getMonthlyFinancialHistory() {
         }
       ]),
 
-      // Interest collected in this month
+      // Interest collected from repayments in this month
       Repayment.aggregate([
         {
           $match: {
@@ -191,19 +202,38 @@ async function getMonthlyFinancialHistory() {
             total: { $sum: '$interestAmount' }
           }
         }
+      ]),
+
+      // Historical interest for this month
+      HistoricalInterest.aggregate([
+        {
+          $match: {
+            interestDate: { $gte: date, $lt: new Date(year, month, 1) }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
       ])
     ]);
 
     const contributionsAmount = contributions[0]?.total || 0;
     const loansAmount = loansGiven[0]?.total || 0;
-    const interestAmount = interestCollected[0]?.total || 0;
+    const repaymentInterestAmount = interestCollected[0]?.total || 0;
+    const historicalInterestAmount = historicalInterestForMonth[0]?.total || 0;
+
+    // Total interest for the month includes both repayment and historical interest
+    const totalInterestAmount = repaymentInterestAmount + historicalInterestAmount;
 
     months.push({
       month: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       contributions: contributionsAmount,
       loansGiven: loansAmount,
-      interestCollected: interestAmount,
-      netGrowth: contributionsAmount + interestAmount - loansAmount
+      interestCollected: totalInterestAmount,
+      netGrowth: contributionsAmount + totalInterestAmount - loansAmount
     });
   }
 

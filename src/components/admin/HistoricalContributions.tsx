@@ -241,11 +241,11 @@ export default function HistoricalContributions() {
             <p className="font-medium text-blue-900">Policy Examples:</p>
             <ul className="text-blue-800 mt-1 space-y-1">
               <li>
-                • Member joined before Sept 15, 2022 → Contributes from Sept 15,
-                2022
+                • Member joined before Sept 15, 2023 → Contributes from Sept 15,
+                2023
               </li>
               <li>
-                • Member joined after Sept 15, 2022 → Contributes from their
+                • Member joined after Sept 15, 2023 → Contributes from their
                 join date
               </li>
               <li>• All members contribute up to current month</li>
@@ -316,11 +316,10 @@ export default function HistoricalContributions() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="text-center p-4 border rounded-lg">
                       <div
-                        className={`text-2xl font-bold ${
-                          userContributionData.contributionStatus.isCurrent
+                        className={`text-2xl font-bold ${userContributionData.contributionStatus.isCurrent
                             ? "text-green-600"
                             : "text-red-600"
-                        }`}
+                          }`}
                       >
                         {userContributionData.contributionStatus.isCurrent
                           ? "CURRENT"
@@ -465,8 +464,8 @@ export default function HistoricalContributions() {
                             Selected: {selectedMonths.size} | Total:{" "}
                             {formatCurrency(
                               selectedMonths.size *
-                                (parseFloat(contributionAmount) ||
-                                  COMMUNITY_CONFIG.DEFAULT_CONTRIBUTION_AMOUNT)
+                              (parseFloat(contributionAmount) ||
+                                COMMUNITY_CONFIG.DEFAULT_CONTRIBUTION_AMOUNT)
                             )}
                           </p>
                         </div>
@@ -476,7 +475,7 @@ export default function HistoricalContributions() {
                           size="sm"
                         >
                           {selectedMonths.size ===
-                          userContributionData.missingMonths.length
+                            userContributionData.missingMonths.length
                             ? "Deselect All"
                             : "Select All"}
                         </Button>

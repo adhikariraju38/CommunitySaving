@@ -4,13 +4,14 @@ import { Document, Types } from 'mongoose';
 export interface IUser extends Document {
   _id: Types.ObjectId;
   name: string;
-  email: string;
-  password: string;
+  email?: string; // Optional for bulk-added members
+  password?: string; // Optional for bulk-added members
   phone: string;
   memberId: string;
   role: 'admin' | 'member';
   status: 'pending' | 'approved' | 'rejected';
   isActive: boolean;
+  hasLoginAccess: boolean; // True when both email and password are provided
   joinDate: Date;
   lastLogin?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -23,6 +24,25 @@ export interface IUserLogin {
 
 export interface IUserRegister extends Omit<IUser, '_id' | 'comparePassword' | 'lastLogin'> {
   confirmPassword: string;
+}
+
+// Bulk Member Creation Types
+export interface IBulkMemberData {
+  name: string;
+  phone: string;
+}
+
+export interface IBulkMemberCreate {
+  members: IBulkMemberData[];
+}
+
+// Member Edit Types
+export interface IMemberEdit {
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  isActive?: boolean;
 }
 
 // Contribution Types
@@ -84,6 +104,38 @@ export interface IRepayment extends Document {
   notes?: string;
   receiptNumber?: string;
   createdAt: Date;
+}
+
+// Historical Interest Types
+export interface IHistoricalInterest extends Document {
+  _id: Types.ObjectId;
+  amount: number;
+  interestDate: Date;
+  source: 'loan_repayment' | 'penalty' | 'late_fee' | 'settlement' | 'other';
+  description: string;
+  userId?: Types.ObjectId;
+  loanId?: Types.ObjectId;
+  borrowerName?: string;
+  recordedBy: Types.ObjectId;
+  receiptNumber?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Historical Interest Form Types
+export interface IHistoricalInterestCreate {
+  amount: number;
+  interestDate: Date;
+  source: 'loan_repayment' | 'penalty' | 'late_fee' | 'settlement' | 'other';
+  description: string;
+  userId?: string;
+  borrowerName?: string;
+  notes?: string;
+}
+
+export interface IHistoricalInterestEdit extends Partial<IHistoricalInterestCreate> {
+  _id: string;
 }
 
 // Dashboard Types

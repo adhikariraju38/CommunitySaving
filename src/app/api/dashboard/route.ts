@@ -4,6 +4,7 @@ import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 import Contribution from '@/models/Contribution';
 import Loan from '@/models/Loan';
+import HistoricalInterest from '@/models/HistoricalInterest';
 import { withAuth, withErrorHandling, AuthenticatedRequest } from '@/middleware/auth';
 import { IDashboardStats, IMemberStats } from '@/types';
 
@@ -22,6 +23,7 @@ export const GET = withErrorHandling(
         totalLoansResult,
         outstandingLoansResult,
         interestCollected,
+        historicalInterestCollected,
         totalMembers,
         activeMembers,
         currentMonthStats,
@@ -35,32 +37,35 @@ export const GET = withErrorHandling(
           { $match: { paidStatus: 'paid' } },
           { $group: { _id: null, total: { $sum: '$amount' } } }
         ]),
-        
+
         // Total loans given
         Loan.getTotalLoansGiven(),
-        
+
         // Outstanding loans
         Loan.getOutstandingLoans(),
-        
-        // Interest collected
+
+        // Interest collected from loan repayments
         Loan.getInterestCollected(),
-        
+
+        // Historical interest collected
+        HistoricalInterest.getTotalHistoricalInterest(),
+
         // Total members count
         User.countDocuments(),
-        
+
         // Active members count
         User.countDocuments({ isActive: true }),
-        
+
         // Current month contribution stats
         Contribution.getMonthlyStats(new Date().getFullYear(), new Date().getMonth() + 1),
 
         // Outstanding loans principal (remaining balance)
         Loan.aggregate([
-          { 
-            $match: { 
+          {
+            $match: {
               status: { $in: ['approved', 'disbursed'] },
               remainingBalance: { $gt: 0 }
-            } 
+            }
           },
           {
             $group: {
@@ -82,32 +87,32 @@ export const GET = withErrorHandling(
 
         // Expected yearly interest from active loans
         Loan.aggregate([
-          { 
-            $match: { 
+          {
+            $match: {
               status: { $in: ['approved', 'disbursed'] },
               remainingBalance: { $gt: 0 }
-            } 
+            }
           },
           {
             $group: {
               _id: null,
-              expectedInterest: { 
-                $sum: { 
-                  $multiply: ['$approvedAmount', { $divide: ['$interestRate', 100] }] 
-                } 
+              expectedInterest: {
+                $sum: {
+                  $multiply: ['$approvedAmount', { $divide: ['$interestRate', 100] }]
+                }
               }
             }
           }
         ]),
-        
+
         // Calculate accrued interest from loan start dates to today
         Loan.aggregate([
-          { 
-            $match: { 
+          {
+            $match: {
               status: { $in: ['disbursed'] },
               remainingBalance: { $gt: 0 },
               disbursementDate: { $exists: true }
-            } 
+            }
           },
           {
             $addFields: {
@@ -123,14 +128,14 @@ export const GET = withErrorHandling(
           {
             $group: {
               _id: null,
-              totalAccruedInterest: { 
-                $sum: { 
+              totalAccruedInterest: {
+                $sum: {
                   $multiply: [
                     '$approvedAmount',
                     { $divide: ['$dailyInterestRate', 100] },
                     '$daysSinceStart'
                   ]
-                } 
+                }
               }
             }
           }
@@ -140,23 +145,27 @@ export const GET = withErrorHandling(
       const totalSavings = totalSavingsResult[0]?.total || 0;
       const outstandingLoanPrincipal = activeLoansPrincipalResult[0]?.totalPrincipal || 0;
       const totalInterestEarned = totalInterestEarnedResult[0]?.totalInterest || 0;
+      const historicalInterest = historicalInterestCollected || 0;
       const expectedYearlyInterest = expectedYearlyInterestResult[0]?.expectedInterest || 0;
       const accruedInterestToDate = accruedInterestResult[0]?.totalAccruedInterest || 0;
-      
-      // Available funds = contributions + interest earned - money currently loaned out
-      const availableFunds = totalSavings + totalInterestEarned - outstandingLoanPrincipal;
-      
+
+      // Total interest earned includes both repayment interest and historical interest
+      const totalInterestCollectedCombined = totalInterestEarned + historicalInterest;
+
+      // Available funds = contributions + all interest earned - money currently loaned out
+      const availableFunds = totalSavings + totalInterestCollectedCombined - outstandingLoanPrincipal;
+
       // Total Community Value = Available Funds + Outstanding Loans + Accrued Interest to Date
       // This represents: liquid funds + loaned principal + interest accrued from loan start dates
       const totalCommunityValue = availableFunds + outstandingLoanPrincipal + accruedInterestToDate;
-      
+
       const loanToSavingsRatio = totalSavings > 0 ? (outstandingLoanPrincipal / totalSavings) * 100 : 0;
 
       const stats: IDashboardStats = {
         totalSavings,
         totalLoansGiven: totalLoansResult.totalAmount || 0,
         outstandingLoans: outstandingLoansResult.totalOutstanding || 0,
-        interestCollected: interestCollected || 0,
+        interestCollected: totalInterestCollectedCombined,
         totalMembers,
         activeMembers,
         monthlyContributions: currentMonthStats.paid.totalAmount || 0,
@@ -165,7 +174,7 @@ export const GET = withErrorHandling(
         totalCommunityValue,
         availableFunds,
         expectedYearlyInterest,
-        totalInterestEarned,
+        totalInterestEarned: totalInterestCollectedCombined,
         activeLoansPrincipal: outstandingLoanPrincipal,
         loanToSavingsRatio,
       };
@@ -179,7 +188,7 @@ export const GET = withErrorHandling(
     } else {
       // Member dashboard - personal statistics
       const targetUserId = userId || request.user.userId;
-      
+
       // Members can only access their own data
       if (request.user.role === 'member' && targetUserId !== request.user.userId) {
         return NextResponse.json(
@@ -196,13 +205,13 @@ export const GET = withErrorHandling(
       ] = await Promise.all([
         // User's total savings
         Contribution.getUserTotalSavings(targetUserId),
-        
+
         // Current active loan
         Loan.getUserCurrentLoan(targetUserId),
-        
+
         // Loan history
         Loan.getUserLoanHistory(targetUserId),
-        
+
         // Contribution history (last 12 months)
         Contribution.find({ userId: targetUserId })
           .sort({ month: -1 })

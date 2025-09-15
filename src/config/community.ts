@@ -1,17 +1,20 @@
 // Community configuration constants
 export const COMMUNITY_CONFIG = {
-  // Community opening date - September 15, 2022
+  // Community opening date - September 15, 2023
   OPENING_DATE: new Date('2023-09-15'),
-  
+
   // Default monthly contribution amount in NPR
   DEFAULT_CONTRIBUTION_AMOUNT: 2000,
-  
+
+  // Annual interest rate for new member calculations (%)
+  ANNUAL_INTEREST_RATE: 16,
+
   // Community name and details
   NAME: 'Community Savings Group',
-  
+
   // Policy descriptions
   POLICIES: {
-    HISTORICAL_CONTRIBUTIONS: 'All members must contribute from community opening date (September 15, 2022) or their join date, whichever is later, up to the current month.',
+    HISTORICAL_CONTRIBUTIONS: 'All members must contribute from community opening date (September 15, 2023) or their join date, whichever is later, up to the current month.',
     MONTHLY_CONTRIBUTION: 'Monthly contribution of NPR 2,000 is required from all active members.',
     CATCH_UP_POLICY: 'New members must pay all missing contributions from their required start date before becoming fully active.'
   }
@@ -25,7 +28,7 @@ export const getCommunityStartDate = (): Date => {
 export const getRequiredContributionStartDate = (memberJoinDate: string | Date): Date => {
   const joinDate = new Date(memberJoinDate);
   const communityOpeningDate = getCommunityStartDate();
-  
+
   // Use the later of community opening date or member join date
   return joinDate > communityOpeningDate ? joinDate : communityOpeningDate;
 };
@@ -33,12 +36,12 @@ export const getRequiredContributionStartDate = (memberJoinDate: string | Date):
 export const formatCommunityAge = (): string => {
   const openingDate = getCommunityStartDate();
   const now = new Date();
-  const diffInMonths = (now.getFullYear() - openingDate.getFullYear()) * 12 + 
-                      (now.getMonth() - openingDate.getMonth());
-  
+  const diffInMonths = (now.getFullYear() - openingDate.getFullYear()) * 12 +
+    (now.getMonth() - openingDate.getMonth());
+
   const years = Math.floor(diffInMonths / 12);
   const months = diffInMonths % 12;
-  
+
   if (years === 0) {
     return `${months} month${months !== 1 ? 's' : ''}`;
   } else if (months === 0) {
