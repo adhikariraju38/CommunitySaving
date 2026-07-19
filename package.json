@@ -31,7 +31,7 @@
     "mongoose": "^9.7.4",
     "next": "16.2.10",
     "next-auth": "^4.24.14",
-    "postcss": "^8.5.17",
+    "postcss": "^8.5.20",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-hot-toast": "^2.6.0",
