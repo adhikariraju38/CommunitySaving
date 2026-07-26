@@ -33,7 +33,7 @@
     "next-auth": "^4.24.14",
     "postcss": "^8.5.20",
     "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "react-dom": "19.2.8",
     "react-hot-toast": "^2.6.0",
     "recharts": "^3.9.2",
     "sonner": "^2.0.7",
